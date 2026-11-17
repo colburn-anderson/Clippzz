@@ -11,25 +11,34 @@ Prove that an automated system can make short clips that go viral, then turn tha
 | Area | Decision |
 | --- | --- |
 | Clip engine | Built in this repo and run on the Raspberry Pi 4: yt-dlp, ffmpeg, whisper.cpp, Piper and a Claude model through the Anthropic API. No paid clipping service; Higgsfield has no API. |
-| Clip format | Meme-style edit: the streamer's moment, plus memes, sound effects, zooms and short text chosen to fit it. Some clips get a one-line AI voiceover intro. No fixed template. Typically 2 to 5 edit beats per clip, not constant noise. |
-| Style reference | The user's example Shorts: https://youtube.com/shorts/dz0OGGXHBVU and https://youtube.com/shorts/KKwER8qiAP4 (more to come) |
-| Sources | IShowSpeed and Stable Ronaldo stream VODs on YouTube, links pasted in by hand at first |
+| Clip format | Meme-style edit, 30 to 50 seconds: a short story (setup and payoff, two or three segments) with word-by-word captions throughout, plus colour flashes with sound effects, punch-in zooms, whip transitions and small props (emoji, arrows, circles, effort meter) chosen to fit it. A visible beat every 2 to 4 seconds. Some clips get a one-sentence AI voiceover as a bridge between segments. No fixed template. Full detail in [STYLE.md](STYLE.md). |
+| Style reference | The user's example Shorts: https://youtube.com/shorts/dz0OGGXHBVU and https://youtube.com/shorts/KKwER8qiAP4 (more to come), analysed in [STYLE.md](STYLE.md) |
+| Sources | IShowSpeed VODs from the [@IShowSpeed streams tab](https://www.youtube.com/@IShowSpeed/streams). Stable Ronaldo streams on Twitch; his full streams reach YouTube as uploads on [Stable Ronaldo Live](https://www.youtube.com/channel/UCLldJScHWCtsFlfanYXS8nQ). Links pasted in by hand at first. |
 | Accounts | One main account each on YouTube, Instagram and Facebook. Niche accounts later if data supports them. |
 | Income order | 1. Reach. 2. Ad revenue where eligible. 3. Paid clipping campaigns (Whop Content Rewards and similar) only after the account has traction. |
 | Budget | Under $30 a month; about $5 expected at the start |
 | Where things run | The pipeline and dashboard run on the Pi in Docker, so they work when the MacBook is off. The dashboard is reached over Tailscale. Development happens from a local Claude Code session on the MacBook, which reaches the Pi over SSH. |
 | Git | Push straight to `main`. The Pi pulls `main` and restarts itself. |
-| Secrets | In a `.env` file on the Pi. Never committed. |
+| Secrets | In `/home/tallergiraffe/.clippzz.env` on the Pi (owner-only permissions), outside the repo checkout so a `git pull` never touches it. Never committed. |
+| The Pi | Raspberry Pi 4 Model B, 4 GB RAM, 64-bit Debian 13 (trixie), 32 GB SD card. Shared with the user's robot projects, so the containers get CPU and memory limits. |
 
 ## Pipeline components
 
 1. **Intake:** paste a VOD link in the dashboard. A watcher for new VODs comes in month 1.
-2. **Analyzer:** finds candidate moments without downloading the whole video: YouTube captions, the "most replayed" heatmap, live chat replay and audio peaks.
-3. **Ranker:** a Claude model scores each candidate from 0 to 100, sets start and end, and flags unsafe content.
-4. **Edit planner:** a Claude model with vision looks at frames and the transcript of the chosen moment and writes an edit plan: which memes, sound effects, zooms and text go where, and whether a voiceover fits. Memes and sounds come from a library tagged by mood (shock, laughter, disbelief, hype, fail).
-5. **Renderer:** downloads only the chosen segment, reframes to 9:16 (blurred background first; facecam and gameplay split later) and applies the edit plan with ffmpeg.
+2. **Analyzer:** finds candidate moments without downloading the whole video. Main signals: YouTube auto-captions (always present, with per-word timing and tags such as `[screaming]` and `[laughter]`) and loudness peaks from an audio-only download. Bonus signals when present: the "most replayed" heatmap and live chat replay (see "Source signals" below for why these are often missing).
+3. **Ranker:** a Claude model scores each candidate from 0 to 100, sets start and end, groups candidates that make a setup and payoff, and flags unsafe content.
+4. **Edit planner:** a Claude model with vision looks at frames and the transcript of the chosen segments and writes an edit plan following [STYLE.md](STYLE.md): caption styling and keyword colours, stage-direction captions, flashes, sound effects, zooms, props and transitions, and whether a bridge voiceover fits. Props and sounds come from a library tagged by mood (shock, laughter, disbelief, hype, fail, wholesome).
+5. **Renderer:** downloads only the chosen segments, crops to fill 1080×1920 on the people (face-tracked; no blurred bars), and applies the edit plan with ffmpeg. A facecam-plus-gameplay layout comes later for gaming streams.
 6. **Review:** the user watches each clip in the dashboard, rates it and leaves a note.
 7. Month 1 and later: scheduler, publishers (YouTube Data API, Instagram Graph API, Facebook Pages API), stats collector, Telegram alerts.
+
+### Source signals (checked November 17, 2026)
+
+| Signal | IShowSpeed VODs | Stable Ronaldo uploads | Notes |
+| --- | --- | --- | --- |
+| Auto-captions | Yes, with per-word timing | Yes | Present on every VOD checked |
+| "Most replayed" heatmap | Only on older VODs: none on 4 VODs up to 3 weeks old (2 to 4.5 million views each); present on one from August | Yes, on uploads 3 to 4 months old | Always 100 buckets, so a 3-hour VOD gets one value per 1.8 minutes and a 6-hour VOD one per 4 minutes. Good for picking a region, not an exact moment. |
+| YouTube chat replay | No, on all 5 checked | No (uploads, not live streams) | yt-dlp does read chat replay from another streamer's VOD, so this is the channels, not the tool. Stable Ronaldo's Twitch chat is a possible later source. |
 
 Data: one SQLite database plus files on the Pi under `/data` (sources, work, clips, logs, backups). Every job is a database row with a state, so a power cut loses nothing. Each step retries 3 times before alerting.
 
@@ -44,10 +53,13 @@ Data: one SQLite database plus files on the Pi under `/data` (sources, work, cli
 ## Setup
 
 Needed now:
-- A local Claude Code session on the MacBook with key-based SSH to the Pi at 100.95.15.84 (Tailscale)
-- The user's existing Anthropic API key, with a $5 monthly spend limit, stored in `.env` on the Pi
+- A local Claude Code session on the MacBook with key-based SSH to the Pi at 100.95.15.84 (Tailscale), user `tallergiraffe`. Done and working.
+- The user's existing Anthropic API key, with a $5 monthly spend limit, stored as `ANTHROPIC_API_KEY=...` in `/home/tallergiraffe/.clippzz.env` on the Pi
+- Docker Engine and the Compose plugin on the Pi (not installed yet)
+- Pending OS updates applied on the Pi (444 waiting on November 17)
+- A USB SSD (256 GB or more) on a blue USB 3 port, mounted at `/data`. Moved up from "later": the SD card has 15 GB free and constant video writes wear SD cards out.
 
-Added only when its step is reached: ordinary YouTube, Instagram and Facebook accounts (for posting by hand, after the first good clip), Google Cloud project with the YouTube Data API, Instagram professional account plus Facebook Page plus Meta developer app, Telegram bot (optional), USB SSD, Twitch developer app, Whop account, AdSense, TikTok developer app.
+Added only when its step is reached: ordinary YouTube, Instagram and Facebook accounts (for posting by hand, after the first good clip), Google Cloud project with the YouTube Data API, Instagram professional account plus Facebook Page plus Meta developer app, Telegram bot (optional), Twitch developer app, Whop account, AdSense, TikTok developer app.
 
 Not needed: Cloudflare, GitHub Pages, any paid clipping service.
 

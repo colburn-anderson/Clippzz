@@ -24,4 +24,4 @@ An automated clipping pipeline that runs on a Raspberry Pi 4. It turns long stre
 2. **Month 1 (by December 17, 2026):** automatic uploads, a watcher for new VODs, stats and a weekly report.
 3. **Year 1:** self-tuning edits, a trend radar starting with GTA 6, more channels, TikTok and paid campaigns.
 
-Secrets such as API keys and tokens live in a `.env` file on the Pi and are never committed.
+Secrets such as API keys and tokens live in `/home/tallergiraffe/.clippzz.env` on the Pi and are never committed. The edit style is described in [docs/STYLE.md](docs/STYLE.md).
