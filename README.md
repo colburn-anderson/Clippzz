@@ -4,7 +4,7 @@ An automated clipping pipeline that runs on a Raspberry Pi 4. It turns long stre
 
 **Status:** planning approved on November 17, 2026. Nothing is built yet.
 
-**Full plan:** [Clippzz — Automated Clipping Pipeline Plan](https://claude.ai/artifact/U9JveLdKb8qHtwBfq8DVcC)
+**Full plan:** [Clippzz — Automated Clipping Pipeline Plan](https://claude.ai/artifact/U9JveLdKb8qHtwBfq8DVcC), condensed in [docs/PLAN.md](docs/PLAN.md)
 
 ## Decisions so far
 
