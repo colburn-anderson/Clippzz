@@ -32,24 +32,51 @@ templates.env.filters["fromjson"] = lambda t: db.loads(t, []) or []
 templates.env.filters["fromjsonobj"] = lambda t: db.loads(t, {}) or {}
 
 
-def post_text(clip, vod) -> str:
-    """Title, credits and hashtags, ready to paste into YouTube, Instagram or Facebook."""
-    title = clip["title"] or ""
+# Creators named by a hashtag in a title, with their own channels (checked to exist).
+CREATORS = {
+    "ishowspeed": ("IShowSpeed", "https://www.youtube.com/@IShowSpeed"),
+    "kaicenat": ("Kai Cenat", "https://www.youtube.com/@KaiCenat"),
+    "fanum": ("Fanum", "https://www.youtube.com/@Fanum"),
+    "stableronaldo": ("Stable Ronaldo", "https://www.youtube.com/@StableRonaldo"),
+}
+
+
+def post_parts(clip, vod, moment_start=None) -> dict:
+    """Title, YouTube description and Instagram/Facebook caption for a clip."""
+    title = (clip["title"] or "").strip()
+    plan = db.loads(clip["plan"] if "plan" in clip.keys() else None, {}) or {}
     tags = [w for w in title.split() if w.startswith("#")]
     for extra in ("#funny", "#streamer"):
         if extra not in tags:
             tags.append(extra)
-    channel = vod["channel"] or "the creator"
-    lines = [title, ""]
-    lines.append(f"Credit: {channel}" + (f" → {vod['channel_url']}" if vod["channel_url"] else ""))
-    lines.append(f"From: {vod['url']}")
+    source = next((c for c in CREATORS.values() if c[0].lower() == (vod["channel"] or "").lower()), None)
+    source_name = vod["channel"] or "the creator"
+    source_url = source[1] if source else vod["channel_url"]
+    lines = []
+    if plan.get("premise"):
+        lines += [plan["premise"].strip(), ""]
+    lines.append(f"Credit: {source_name}" + (f" \u2192 {source_url}" if source_url else ""))
+    for tag in tags:
+        known = CREATORS.get(tag.lstrip("#").lower())
+        if known and known[0] != source_name:
+            lines.append(f"Featuring: {known[0]} \u2192 {known[1]}")
+    link = vod["url"] + (f"&t={int(moment_start)}s" if moment_start else "")
+    lines.append(f"Original video: {link}")
     if clip["music_credit"]:
         lines.append(f"Music: {clip['music_credit']}")
-    lines += ["", " ".join(tags)]
-    return "\n".join(lines)
+    lines += ["", " ".join(tags + ["#shorts"])]
+    description = "\n".join(lines)
+    return {"title": title, "description": description,
+            "caption": title + "\n\n" + description.replace(" #shorts", "")}
 
 
-templates.env.globals["post_text"] = post_text
+def post_text(clip, vod, moment_start=None) -> str:
+    parts = post_parts(clip, vod, moment_start)
+    return parts["title"] + "\n\n" + parts["description"]
+
+
+templates.env.globals["post_parts"] = post_parts
+
 
 STATE_LABELS = {
     "queued": "Waiting", "fetching": "Fetching", "listening": "Listening",

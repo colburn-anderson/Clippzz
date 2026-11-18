@@ -25,7 +25,7 @@ def step_fetch(conn, vod):
         raise sources.SourceError("this stream has not finished yet")
     db.set_state(conn, vid, "fetching", "Reading captions",
                  title=info.get("title"), channel=info.get("channel"),
-                 channel_url=info.get("channel_url") or info.get("uploader_url"),
+                 channel_url=info.get("uploader_url") or info.get("channel_url"),
                  duration_s=int(info.get("duration") or 0))
     transcript = sources.fetch_transcript(vid)
     return info, transcript
