@@ -170,3 +170,21 @@ def rate_clip(cid: int, rating: str = Form(...), note: str = Form("")):
         conn.execute("UPDATE clips SET rating=?, note=?, rated_at=? WHERE id=?",
                      (None if rating == "clear" else rating, note.strip()[:500] or None, time.time(), cid))
     return RedirectResponse(f"/vod/{row['vod_id']}#c{cid}", status_code=303)
+
+
+# A reload of a rating or clip form (for example after the Pi restarted mid-submit)
+# arrives as GET. Send it back to the page instead of showing an error.
+@app.get("/moments/{mid}/rate")
+@app.get("/moments/{mid}/clip")
+def moment_form_get(mid: int):
+    with db.session() as conn:
+        row = conn.execute("SELECT vod_id FROM moments WHERE id=?", (mid,)).fetchone()
+    return RedirectResponse(f"/vod/{row['vod_id']}#m{mid}" if row else "/", status_code=303)
+
+
+@app.get("/clips/{cid}/rate")
+def clip_rate_get(cid: int):
+    with db.session() as conn:
+        row = conn.execute("SELECT m.vod_id FROM clips c JOIN moments m ON m.id=c.moment_id"
+                           " WHERE c.id=?", (cid,)).fetchone()
+    return RedirectResponse(f"/vod/{row['vod_id']}#c{cid}" if row else "/", status_code=303)
