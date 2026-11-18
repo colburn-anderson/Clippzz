@@ -32,6 +32,12 @@ button.bad.on { background:var(--bad); border-color:var(--bad); color:#fff; }
 .player iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
 ul.tight { margin:6px 0; padding-left:20px; } ul.tight li { margin:2px 0; }
 details summary { cursor:pointer; color:var(--dim); }
+.chip.working, .chip.queued { color:var(--warn); }
+button[disabled] { opacity:.5; cursor:default; }
+.clip { display:flex; gap:14px; flex-wrap:wrap; align-items:flex-start; border-top:1px solid var(--line); margin-top:12px; padding-top:12px; }
+video.vertical { width:min(100%, 300px); aspect-ratio:9/16; background:#000; border-radius:10px; }
+.clipinfo { flex:1 1 260px; min-width:0; }
+.clipinfo form { margin-top:10px; }
 </style>
 </head>
 <body>

@@ -33,8 +33,9 @@ services:
       - ${HOME}/.clippzz.env
     tmpfs:
       - /work:size=384m,uid=1000,gid=1000
-    # Capped so the robot arm services on this Pi always have room.
+    # Capped so the robot arm services on this Pi always have room. Making a
+    # clip needs the most memory: speech-to-text, then an HD render.
     cpus: 2.5
-    mem_limit: 1g
+    mem_limit: 1536m
     depends_on:
       - web

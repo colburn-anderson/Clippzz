@@ -3,7 +3,7 @@ import time
 from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from . import config, db, sources
@@ -29,12 +29,14 @@ def ago(ts) -> str:
 templates.env.filters["clock"] = clock
 templates.env.filters["ago"] = ago
 templates.env.filters["fromjson"] = lambda t: db.loads(t, []) or []
+templates.env.filters["fromjsonobj"] = lambda t: db.loads(t, {}) or {}
 
 STATE_LABELS = {
     "queued": "Waiting", "fetching": "Fetching", "listening": "Listening",
     "scouting": "Scouting", "judging": "Judging", "done": "Done",
     "failed": "Failed", "paused": "Paused",
 }
+CLIP_LABELS = {"queued": "Waiting", "working": "Making", "done": "Done", "failed": "Failed"}
 
 
 @app.get("/healthz")
@@ -52,8 +54,9 @@ def home(request: Request, error: str = ""):
             " (SELECT COALESCE(SUM(cost_usd),0) FROM usage u WHERE u.vod_id=v.id) AS cost"
             " FROM vods v ORDER BY v.created_at DESC").fetchall()
         spent = db.month_spend(conn)
+        # The week 1 gate counts finished clips, not moments.
         rated = conn.execute(
-            "SELECT rating FROM moments WHERE rating IS NOT NULL ORDER BY rated_at DESC LIMIT 10").fetchall()
+            "SELECT rating FROM clips WHERE rating IS NOT NULL ORDER BY rated_at DESC LIMIT 10").fetchall()
     return templates.TemplateResponse(request, "home.html", {
         "vods": vods, "spent": spent, "budget": config.MONTHLY_BUDGET_USD,
         "labels": STATE_LABELS, "error": error,
@@ -83,11 +86,29 @@ def vod_page(request: Request, vid: str):
             " CASE verdict WHEN 'post' THEN 0 WHEN 'maybe' THEN 1 ELSE 2 END,"
             " judge_score DESC, scout_score DESC", (vid,)).fetchall()
         cost = db.vod_spend(conn, vid)
+        clips = {}
+        for c in _vod_clips(conn, vid):
+            clips.setdefault(c["moment_id"], []).append(c)
     return templates.TemplateResponse(request, "vod.html", {
         "vod": vod, "moments": moments, "cost": cost, "labels": STATE_LABELS,
         "signals": db.loads(vod["signals"], {}) or {},
         "busy": vod["state"] in db.ACTIVE_STATES,
+        "clips": clips, "clip_labels": CLIP_LABELS,
+        "clip_busy": any(c["state"] in db.CLIP_ACTIVE_STATES for cs in clips.values() for c in cs),
     })
+
+
+def _vod_clips(conn, vid):
+    return conn.execute(
+        "SELECT c.* FROM clips c JOIN moments m ON m.id=c.moment_id WHERE m.vod_id=?"
+        " ORDER BY c.id DESC", (vid,)).fetchall()
+
+
+@app.get("/vod/{vid}/clips.json")
+def vod_clips(vid: str):
+    with db.session() as conn:
+        rows = _vod_clips(conn, vid)
+    return JSONResponse([{"id": c["id"], "state": c["state"], "detail": c["detail"]} for c in rows])
 
 
 @app.post("/vod/{vid}/retry")
@@ -109,3 +130,43 @@ def rate(mid: int, rating: str = Form(...), note: str = Form("")):
         conn.execute("UPDATE moments SET rating=?, note=?, rated_at=? WHERE id=?",
                      (None if rating == "clear" else rating, note.strip()[:500] or None, time.time(), mid))
     return RedirectResponse(f"/vod/{row['vod_id']}#m{mid}", status_code=303)
+
+
+@app.post("/moments/{mid}/clip")
+def make_clip(mid: int):
+    with db.session() as conn:
+        row = conn.execute("SELECT vod_id FROM moments WHERE id=?", (mid,)).fetchone()
+        if not row:
+            raise HTTPException(404, "No such moment")
+        busy = conn.execute("SELECT 1 FROM clips WHERE moment_id=? AND state IN ('queued','working')",
+                            (mid,)).fetchone()
+        if not busy:
+            db.add_clip(conn, mid)
+    return RedirectResponse(f"/vod/{row['vod_id']}#m{mid}", status_code=303)
+
+
+@app.get("/clips/{cid}.mp4")
+def clip_file(cid: int):
+    with db.session() as conn:
+        row = conn.execute("SELECT path FROM clips WHERE id=? AND state='done'", (cid,)).fetchone()
+    if not row or not row["path"]:
+        raise HTTPException(404, "No such clip")
+    path = Path(row["path"])
+    if not path.is_file() or config.CLIPS_DIR.resolve() not in path.resolve().parents:
+        raise HTTPException(404, "Clip file missing")
+    return FileResponse(path, media_type="video/mp4", filename=f"clippzz-{cid}.mp4",
+                        content_disposition_type="inline")
+
+
+@app.post("/clips/{cid}/rate")
+def rate_clip(cid: int, rating: str = Form(...), note: str = Form("")):
+    if rating not in ("good", "bad", "clear"):
+        raise HTTPException(400, "Unknown rating")
+    with db.session() as conn:
+        row = conn.execute("SELECT m.vod_id, c.moment_id FROM clips c JOIN moments m ON m.id=c.moment_id"
+                           " WHERE c.id=?", (cid,)).fetchone()
+        if not row:
+            raise HTTPException(404, "No such clip")
+        conn.execute("UPDATE clips SET rating=?, note=?, rated_at=? WHERE id=?",
+                     (None if rating == "clear" else rating, note.strip()[:500] or None, time.time(), cid))
+    return RedirectResponse(f"/vod/{row['vod_id']}#c{cid}", status_code=303)

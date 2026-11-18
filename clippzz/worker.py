@@ -1,4 +1,5 @@
-"""The worker: takes queued VODs through fetch -> listen -> scout -> judge.
+"""The worker: takes queued VODs through fetch -> listen -> scout -> judge,
+and makes the clips queued from the dashboard.
 
 Each step saves its result before the next starts, so the worker can be
 killed at any point (power cut, redeploy) and carry on from the same place.
@@ -10,21 +11,10 @@ import time
 
 import anthropic
 
-from . import config, db, ranker, sources
+from . import clipper, config, db, ranker, sources
+from .db import BudgetReached, check_budget
 
 log = logging.getLogger("clippzz.worker")
-
-
-class BudgetReached(RuntimeError):
-    pass
-
-
-def check_budget(conn):
-    spent = db.month_spend(conn)
-    if spent >= config.MONTHLY_BUDGET_USD:
-        raise BudgetReached(
-            f"Monthly budget reached (${spent:.2f} of ${config.MONTHLY_BUDGET_USD:.2f}). "
-            "Raise CLIPPZZ_MONTHLY_BUDGET_USD or wait for next month, then press Retry.")
 
 
 def step_fetch(conn, vod):
@@ -136,10 +126,34 @@ def process(conn, vod):
     shutil.rmtree(config.WORK_DIR / vid, ignore_errors=True)
 
 
+def run_clip(conn, clip):
+    cid = clip["id"]
+    log.info("making clip %s (attempt %s)", cid, clip["attempts"] + 1)
+    try:
+        clipper.make(conn, cid)
+    except BudgetReached as e:
+        db.set_clip(conn, cid, "failed", str(e))
+    except anthropic.AuthenticationError:
+        db.set_clip(conn, cid, "failed", "The Anthropic API key was rejected. Check ~/.clippzz.env on the Pi.")
+    except Exception as e:  # noqa: BLE001 - recorded on the row and retried
+        attempts = clip["attempts"] + 1
+        log.exception("clip %s failed (attempt %s)", cid, attempts)
+        msg = f"{type(e).__name__}: {e}"[:500]
+        if attempts >= config.MAX_ATTEMPTS:
+            db.set_clip(conn, cid, "failed", msg, attempts=attempts)
+        else:
+            db.set_clip(conn, cid, "queued", f"Retrying after error: {msg}", attempts=attempts)
+            time.sleep(30 * attempts)
+
+
 def run_once(conn) -> bool:
     vod = db.next_vod(conn)
     if not vod:
-        return False
+        clip = db.next_clip(conn)
+        if not clip:
+            return False
+        run_clip(conn, clip)
+        return True
     vid = vod["id"]
     log.info("processing %s (state %s, attempt %s)", vid, vod["state"], vod["attempts"] + 1)
     try:

@@ -35,10 +35,25 @@ CREATE TABLE IF NOT EXISTS usage (
     vod_id TEXT, step TEXT, model TEXT,
     input_tokens INTEGER, output_tokens INTEGER, cost_usd REAL, at REAL
 );
+CREATE TABLE IF NOT EXISTS clips (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    moment_id INTEGER NOT NULL REFERENCES moments(id),
+    state TEXT NOT NULL DEFAULT 'queued',   -- queued, working, done, failed
+    detail TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    section_start_s REAL,           -- where the downloaded section starts in the VOD
+    plan TEXT,                      -- JSON edit plan (times are section times)
+    words TEXT,                     -- JSON speech-to-text words, kept for re-renders
+    title TEXT, duration_s REAL, cost_usd REAL, path TEXT,
+    rating TEXT, note TEXT, rated_at REAL,
+    created_at REAL NOT NULL, updated_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS clips_moment ON clips(moment_id);
 """
 
 # States a VOD moves through, in order.
 ACTIVE_STATES = ("queued", "fetching", "listening", "scouting", "judging")
+CLIP_ACTIVE_STATES = ("queued", "working")
 
 
 def connect() -> sqlite3.Connection:
@@ -87,6 +102,27 @@ def next_vod(conn):
     ).fetchone()
 
 
+def add_clip(conn, moment_id: int) -> int:
+    now = time.time()
+    cur = conn.execute(
+        "INSERT INTO clips (moment_id, created_at, updated_at) VALUES (?,?,?)",
+        (moment_id, now, now))
+    conn.commit()
+    return cur.lastrowid
+
+
+def set_clip(conn, clip_id: int, state: str, detail: str | None = None, **fields):
+    cols = {"state": state, "detail": detail, "updated_at": time.time(), **fields}
+    sets = ", ".join(f"{k}=?" for k in cols)
+    conn.execute(f"UPDATE clips SET {sets} WHERE id=?", (*cols.values(), clip_id))
+    conn.commit()
+
+
+def next_clip(conn):
+    return conn.execute(
+        "SELECT * FROM clips WHERE state IN ('queued','working') ORDER BY created_at LIMIT 1").fetchone()
+
+
 def record_usage(conn, vod_id, step, model, input_tokens, output_tokens):
     price_in, price_out = config.PRICES.get(model, (0.0, 0.0))
     cost = (input_tokens * price_in + output_tokens * price_out) / 1_000_000
@@ -97,6 +133,18 @@ def record_usage(conn, vod_id, step, model, input_tokens, output_tokens):
     )
     conn.commit()
     return cost
+
+
+class BudgetReached(RuntimeError):
+    pass
+
+
+def check_budget(conn):
+    spent = month_spend(conn)
+    if spent >= config.MONTHLY_BUDGET_USD:
+        raise BudgetReached(
+            f"Monthly budget reached (${spent:.2f} of ${config.MONTHLY_BUDGET_USD:.2f}). "
+            "Raise CLIPPZZ_MONTHLY_BUDGET_USD or wait for next month, then press Retry.")
 
 
 def month_spend(conn) -> float:

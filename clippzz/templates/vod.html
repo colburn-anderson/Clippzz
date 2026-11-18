@@ -57,6 +57,42 @@
     <button class="bad {{ 'on' if m.rating == 'bad' }}" name="rating" value="bad" type="submit">Not funny</button>
     <input type="text" name="note" placeholder="Note (optional): what worked or did not" value="{{ m.note or '' }}">
   </form>
+  {% set mclips = clips.get(m.id, []) %}
+  {% for c in mclips %}
+  <div class="clip" id="c{{ c.id }}" data-state="{{ c.state }}">
+    {% if c.state == "done" %}
+    <video class="vertical" controls playsinline preload="metadata" src="/clips/{{ c.id }}.mp4#t=0.5"></video>
+    <div class="clipinfo">
+      <strong>{{ c.title }}</strong>
+      <div class="small dim">Clip {{ c.id }} · {{ c.detail }}{% if c.cost_usd %} · ${{ "%.2f"|format(c.cost_usd) }}{% endif %}
+        · <a href="/clips/{{ c.id }}.mp4" download>Download</a></div>
+      {% set plan = c.plan|fromjsonobj %}
+      {% if plan %}
+      <details>
+        <summary>The edit plan</summary>
+        <p class="small"><strong>Premise:</strong> {{ plan.premise }}<br>
+          <strong>Fit for the format:</strong> {{ plan.fit }}. {{ plan.fit_reason }}</p>
+        <ol class="tight small">{% for b in plan.beats %}<li>{{ "%.1f"|format(b.start_s) }} to {{ "%.1f"|format(b.end_s) }} s: {{ b.shows }}{% if b.zoom > 1.05 %} (punch-in){% endif %}</li>{% endfor %}</ol>
+        <p class="small"><strong>Stage directions:</strong> {% for d in plan.stage_directions %}*{{ d.text.strip("*") }}*{{ ", " if not loop.last }}{% endfor %}</p>
+      </details>
+      {% endif %}
+      <form class="row" method="post" action="/clips/{{ c.id }}/rate">
+        <button class="good {{ 'on' if c.rating == 'good' }}" name="rating" value="good" type="submit">Post it</button>
+        <button class="bad {{ 'on' if c.rating == 'bad' }}" name="rating" value="bad" type="submit">Not good enough</button>
+        <input type="text" name="note" placeholder="What to change (optional)" value="{{ c.note or '' }}">
+      </form>
+    </div>
+    {% else %}
+    <div><span class="chip {{ c.state }}">{{ clip_labels.get(c.state, c.state) }}</span>
+      <span class="small status">{{ c.detail or "" }}</span></div>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% set making = mclips and mclips[0].state in ("queued", "working") %}
+  <form method="post" action="/moments/{{ m.id }}/clip" style="margin-top:10px">
+    <button type="submit" {{ "disabled" if making }}>{{ "Make another clip" if mclips else "Make a clip" }}</button>
+    <span class="small dim">About 5 to 10 minutes and roughly 50 cents.</span>
+  </form>
 </div>
 {% endfor %}
 
@@ -78,5 +114,26 @@
   <a href="{{ vod.url }}&t={{ m.start_s|int }}s" target="_blank" rel="noopener">Watch on YouTube</a>
 </div>
 {% endfor %}
+{% endif %}
+
+{% if clip_busy %}
+<script>
+// While a clip is being made, update its status line and reload once it is done.
+(function poll() {
+  setTimeout(async () => {
+    try {
+      const list = await (await fetch("/vod/{{ vod.id }}/clips.json", {cache: "no-store"})).json();
+      let reload = false;
+      for (const c of list) {
+        const el = document.getElementById("c" + c.id);
+        if (!el || el.dataset.state !== c.state) { reload = true; continue; }
+        const status = el.querySelector(".status");
+        if (status) status.textContent = c.detail || "";
+      }
+      if (reload) location.reload(); else poll();
+    } catch (e) { poll(); }
+  }, 8000);
+})();
+</script>
 {% endif %}
 {% endblock %}

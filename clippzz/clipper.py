@@ -1,0 +1,216 @@
+"""Makes one finished clip from a judged moment:
+
+download the moment in HD (RAM scratch) -> speech-to-text with word timings
+-> frames twice a second -> the planner writes the edit -> the renderer
+follows it -> the MP4 is saved under /data/clips.
+
+Run by the worker for clips queued from the dashboard, or by hand:
+    python -m clippzz.clipper --moment 10          new clip from moment 10
+    python -m clippzz.clipper --clip 3 --rerender  render clip 3 again from its saved plan
+"""
+import argparse
+import gzip
+import json
+import logging
+import math
+import shutil
+import subprocess
+import time
+from pathlib import Path
+
+from . import config, db, planner, render, sources, transcribe
+
+log = logging.getLogger("clippzz.clipper")
+
+# Best 1080p with H.264 (cheapest to decode on the Pi), else the best up to 1080p.
+SECTION_FORMAT = ("137+140/299+140/bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]"
+                  "/bv*[height<=1080]+ba/b[height<=1080]/b")
+
+
+def fetch_section(vid: str, start_s: float, end_s: float, wd: Path) -> Path:
+    r = sources._run([*sources.YTDLP, "-q", "-f", SECTION_FORMAT,
+                      "--download-sections", f"*{start_s:.2f}-{end_s:.2f}",
+                      "--merge-output-format", "mp4", "-o", str(wd / "src.%(ext)s"),
+                      f"https://www.youtube.com/watch?v={vid}"], timeout=900)
+    src = wd / "src.mp4"
+    if r.returncode != 0 or not src.exists():
+        raise sources.SourceError("HD section download failed: "
+                                  + r.stderr.decode(errors="replace").strip()[-300:])
+    return src
+
+
+def probe(path: Path) -> dict:
+    """Frame size, length, and how far each stream starts after the earliest one."""
+    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries",
+                        "stream=codec_type,width,height,start_time:format=duration",
+                        "-of", "json", str(path)], capture_output=True, timeout=60)
+    d = json.loads(r.stdout or b"{}")
+    streams = d.get("streams", [])
+    v = next((s for s in streams if s.get("codec_type") == "video"), None)
+    a = next((s for s in streams if s.get("codec_type") == "audio"), None)
+    if not v or not a:
+        raise sources.SourceError("the downloaded section is missing its video or audio")
+    vs, as_ = float(v.get("start_time") or 0), float(a.get("start_time") or 0)
+    base = min(vs, as_)
+    return {"width": int(v["width"]), "height": int(v["height"]),
+            "duration": float(d["format"]["duration"]), "v_off": vs - base, "a_off": as_ - base}
+
+
+def extract_wav(src: Path, wd: Path) -> Path:
+    wav = wd / "audio.wav"
+    r = subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(src), "-vn", "-ac", "1",
+                        "-ar", "16000", "-c:a", "pcm_s16le", str(wav)], capture_output=True, timeout=300)
+    if r.returncode != 0:
+        raise RuntimeError("audio extract failed: " + r.stderr.decode(errors="replace")[-300:])
+    return wav
+
+
+def half_second_levels(wav: Path) -> list[float]:
+    """Loudness (dB RMS) of each half second of the 16 kHz WAV."""
+    r = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(wav), "-af",
+         "asetnsamples=n=8000:p=0,astats=metadata=1:reset=1,"
+         "ametadata=mode=print:key=lavfi.astats.Overall.RMS_level:file=-",
+         "-f", "null", "-"], capture_output=True, timeout=300)
+    levels = []
+    for line in r.stdout.decode(errors="replace").splitlines():
+        if "RMS_level=" in line:
+            try:
+                v = float(line.rsplit("=", 1)[1])
+            except ValueError:
+                v = -90.0
+            levels.append(max(v, -90.0) if v == v else -90.0)
+    return levels
+
+
+def extract_frames(src: Path, wd: Path, v_off: float, fps: int = 2, width: int = 576):
+    fd = wd / "frames"
+    shutil.rmtree(fd, ignore_errors=True)
+    fd.mkdir()
+    r = subprocess.run(["ffmpeg", "-v", "error", "-i", str(src), "-vf", f"fps={fps},scale={width}:-2",
+                        "-q:v", "5", str(fd / "f_%04d.jpg")], capture_output=True, timeout=600)
+    files = sorted(fd.glob("f_*.jpg"))
+    if not files:
+        raise RuntimeError("frame extract failed: " + r.stderr.decode(errors="replace")[-300:])
+    frames = [(round(v_off + i / fps, 2), f.read_bytes()) for i, f in enumerate(files)]
+    shutil.rmtree(fd, ignore_errors=True)
+    return frames
+
+
+def youtube_lines(vid: str, start_s: float, duration: float) -> list[tuple[float, str]]:
+    """YouTube's auto-caption lines for the section, in section time."""
+    saved = config.SOURCES_DIR / vid / "transcript.json.gz"
+    if not saved.exists():
+        return []
+    lines = json.loads(gzip.decompress(saved.read_bytes())).get("lines", [])
+    return [(round(t - start_s, 1), text) for t, text in lines if start_s - 2 <= t <= start_s + duration]
+
+
+def _top(levels: list[float], fraction: float) -> float:
+    if not levels:
+        return 0.0
+    ordered = sorted(levels)
+    return ordered[min(len(ordered) - 1, int(len(ordered) * (1 - fraction)))]
+
+
+def make(conn, clip_id: int, keep: bool = False, rerender: bool = False) -> dict:
+    clip = conn.execute("SELECT * FROM clips WHERE id=?", (clip_id,)).fetchone()
+    if not clip:
+        raise ValueError(f"no clip {clip_id}")
+    m = conn.execute("SELECT * FROM moments WHERE id=?", (clip["moment_id"],)).fetchone()
+    vod = conn.execute("SELECT * FROM vods WHERE id=?", (m["vod_id"],)).fetchone()
+    if rerender and not (clip["plan"] and clip["words"]):
+        raise ValueError(f"clip {clip_id} has no saved plan to render again")
+    wd = config.WORK_DIR / f"clip-{clip_id}"
+    wd.mkdir(parents=True, exist_ok=True)
+    t0 = time.time()
+
+    def step(detail, **fields):
+        log.info("clip %s: %s (%.0fs in)", clip_id, detail, time.time() - t0)
+        db.set_clip(conn, clip_id, "working", detail, **fields)
+
+    try:
+        if rerender and clip["section_start_s"] is not None:
+            start = clip["section_start_s"]
+        else:
+            # YouTube stream recordings have a keyframe every 2 seconds.
+            start = max(0.0, math.floor((m["start_s"] - config.CLIP_PAD_S) / 2) * 2)
+        end = m["end_s"] + config.CLIP_PAD_S
+        src = wd / "src.mp4"
+        if not src.exists():
+            step("Downloading the moment in HD", section_start_s=start)
+            fetch_section(vod["id"], start, end, wd)
+        info = probe(src)
+        wav = extract_wav(src, wd)
+        levels = half_second_levels(wav)
+
+        def level_at(t):
+            i = int((t - info["a_off"]) / 0.5)
+            return levels[i] if 0 <= i < len(levels) else -90.0
+
+        shout = _top(levels, 0.35)
+
+        if rerender:
+            plan, words = json.loads(clip["plan"]), json.loads(clip["words"])
+        else:
+            step("Writing captions from the audio")
+            prompt = f"{vod['channel'] or ''}. {vod['title'] or ''}."
+            words = [[ws + info["a_off"], we + info["a_off"], w]
+                     for ws, we, w in transcribe.words(wav, prompt)]
+            db.set_clip(conn, clip_id, "working", "Looking at the frames", words=json.dumps(words))
+            frames = extract_frames(src, wd, info["v_off"])
+            loud_cut = _top(levels, 0.15)
+            loud_times = [round(info["a_off"] + i * 0.5, 1) for i, v in enumerate(levels) if v >= loud_cut]
+            db.check_budget(conn)
+            step(f"Planning the edit from {len(frames)} frames")
+            meta = {"channel": vod["channel"], "title": vod["title"]}
+            plan, tin, tout = planner.plan_clip(meta, dict(m), frames, words, loud_times,
+                                                info["duration"], info["width"], info["height"],
+                                                yt_lines=youtube_lines(vod["id"], start, info["duration"]))
+            cost = db.record_usage(conn, vod["id"], "plan", config.PLANNER_MODEL, tin, tout)
+            plan = planner.tidy(plan, words, info["duration"])
+            db.set_clip(conn, clip_id, "working", "Rendering", plan=json.dumps(plan),
+                        title=plan.get("title"), cost_usd=round(cost, 4))
+            log.info("clip %s: plan cost $%.3f (%s in, %s out tokens)", clip_id, cost, tin, tout)
+
+        step("Rendering")
+        out = wd / "clip.mp4"
+        stats = render.render(src, plan, words, out, info["width"], info["height"],
+                              loud=lambda t: level_at(t) >= shout)
+        config.CLIPS_DIR.mkdir(parents=True, exist_ok=True)
+        final = config.CLIPS_DIR / f"{clip_id}.mp4"
+        shutil.move(str(out), final)
+        stats["seconds"] = round(time.time() - t0)
+        db.set_clip(conn, clip_id, "done",
+                    f"{stats['duration_s']:.1f} s, {stats['beats']} beats, "
+                    f"made in {stats['seconds'] // 60} min {stats['seconds'] % 60} s",
+                    path=str(final), duration_s=stats["duration_s"])
+        log.info("clip %s: done %s", clip_id, stats)
+        return stats
+    finally:
+        if not keep:
+            shutil.rmtree(wd, ignore_errors=True)
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Make a clip from a judged moment.")
+    ap.add_argument("--moment", type=int, help="moment id: make a new clip from it")
+    ap.add_argument("--clip", type=int, help="clip id: run this clip again")
+    ap.add_argument("--rerender", action="store_true", help="reuse the clip's saved plan and words")
+    ap.add_argument("--keep", action="store_true", help="keep the scratch files (for re-renders)")
+    args = ap.parse_args()
+    if not (args.moment or args.clip):
+        ap.error("give --moment or --clip")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+    with db.session() as conn:
+        clip_id = args.clip or db.add_clip(conn, args.moment)
+        try:
+            stats = make(conn, clip_id, keep=args.keep, rerender=args.rerender)
+        except Exception as e:
+            db.set_clip(conn, clip_id, "failed", f"{type(e).__name__}: {e}"[:500])
+            raise
+        print(json.dumps({"clip": clip_id, **stats}))
+
+
+if __name__ == "__main__":
+    main()
