@@ -24,6 +24,18 @@ Prove that an automated system can make short clips that go viral, then turn tha
 | Secrets | In `/home/tallergiraffe/.clippzz.env` on the Pi (owner-only permissions), outside the repo checkout so a `git pull` never touches it. Never committed. |
 | The Pi | Raspberry Pi 4 Model B, 4 GB RAM, 64-bit Debian 13 (trixie), 32 GB SD card. Shared with the user's robot projects, so the containers get CPU and memory limits. |
 
+## Build status (November 18, 2026)
+
+| Piece | Status |
+| --- | --- |
+| Intake, analyzer, ranker, review dashboard | Built and running on the Pi (dashboard on port 8787) |
+| Edit planner, renderer, prop and meme library | Next |
+| Scheduler, publishers, stats, alerts | Month 1 |
+
+How it differs from the outline below: the ranker's first pass ("scout", Claude Haiku 5.5) reads the entire transcript in ten-minute stretches, which costs about a cent per VOD, so there is no separate signal-based shortlist. Loudness and the heatmap are passed to it as hints. The second pass ("judge", Claude Opus 5.5) sees eight frames and the timed transcript for the top ten moments.
+
+Storage care until the USB SSD arrives: scratch files (frames, section downloads) live in RAM, the audio scan is streamed and never saved, code is mounted read-only into the containers, container logs are capped at 4 MB, and the only regular writes are the SQLite database and a compressed transcript per VOD.
+
 ## Pipeline components
 
 1. **Intake:** paste a VOD link in the dashboard. A watcher for new VODs comes in month 1.
@@ -58,6 +70,7 @@ Needed now:
 - A local Claude Code session on the MacBook with key-based SSH to the Pi at 100.95.15.84 (Tailscale), user `tallergiraffe`. Done and working.
 - The user's existing Anthropic API key, with a $5 monthly spend limit, stored as `ANTHROPIC_API_KEY=...` in `/home/tallergiraffe/.clippzz.env` on the Pi
 - Docker Engine and the Compose plugin on the Pi, plus the pending OS updates (444 on November 17): run `bash ~/clippzz/scripts/pi-setup.sh` on the Pi, which needs the user's sudo password
+- Fan: `bash ~/clippzz/scripts/pi-fan.sh <GPIO> [temperature]`. Physical pin 8 is GPIO 14, which the robot arm server already drives (stepper direction pins are GPIO 14, 15 and 27), so the fan's control wire needs a free pin such as GPIO 18 (physical pin 12).
 - If Tailscale on the Mac stops passing traffic ("MagicSock function not running"), quit and reopen the Tailscale app; reboot the Mac if that does not fix it. SSH over the home network (`ssh tallergiraffe@TallerGiraffe.local`) works as a fallback.
 - A USB SSD (256 GB or more) on a blue USB 3 port, mounted at `/data`. Moved up from "later": the SD card has 15 GB free and constant video writes wear SD cards out.
 
