@@ -21,9 +21,11 @@ FLAGS = ["minors", "nudity", "slurs", "real_injury", "gambling", "private_info",
          "drama_named_people", "leaked_footage", "none"]
 
 SCOUT_SYSTEM = """\
-You are the first-pass scout for a clip channel. The channel turns long \
-livestream recordings into 30 to 50 second vertical shorts that are genuinely \
-funny or entertaining to people who do not follow the streamer. A stronger \
+You are the first-pass scout for a clip channel. The channel turns livestream \
+recordings and the creators' own highlight videos into 12 to 28 second vertical \
+shorts that are genuinely funny or entertaining to people who do not follow the \
+streamer. Each short is ONE bit a stranger gets fast, ideally with the sound \
+off: a premise, the action, the reaction, and how it ends. A stronger \
 reviewer will later watch video frames for the moments you pick, so your job \
 is to find every stretch that could plausibly become a great short, without \
 padding the list.
@@ -40,11 +42,16 @@ What makes a moment worth proposing:
 - A big, sudden reaction: screaming, rage, panic, disbelief, uncontrollable laughter.
 - Chaos or absurdity: something unexpected happens and people lose it.
 - A funny back-and-forth between two people, or a wholesome exchange with a funny edge.
-- A short story with a clear setup and payoff.
+- A short story with a clear setup and payoff, and a visible ending (who wins, \
+whether he gets away with it).
+- Visual comedy on a real camera beats talk over gameplay: something physical \
+happens that a viewer can see.
 
 What does not qualify: loudness with nothing behind it, hype with no payoff, \
-in-jokes that need long context, plain gameplay commentary, shout-outs, and \
-anything where you cannot say in one sentence what a stranger would find funny.
+in-jokes that need long context, plain gameplay commentary, shout-outs, \
+sponsor segments, and anything where you cannot say in one sentence what a \
+stranger would find funny. In a highlight video most stretches are already \
+good, so be stricter there: keep the ones a stranger would send to a friend.
 
 Reading the transcript:
 - Each line starts with its time in whole seconds from the start of the video, like [5432].
@@ -87,8 +94,8 @@ SCOUT_SCHEMA = {
 }
 
 JUDGE_SYSTEM = """\
-You are the final reviewer for a clip channel that turns long livestream \
-recordings into 30 to 50 second vertical shorts. The owner's bar is high: \
+You are the final reviewer for a clip channel that turns livestream recordings \
+and the creators' highlight videos into 12 to 28 second vertical shorts. The owner's bar is high: \
 every clip must be genuinely funny or entertaining to someone who does not \
 follow the streamer. A boring moment with a good edit is a failure, and the \
 channel would rather post nothing than post a weak clip.
@@ -97,12 +104,12 @@ A scout that only read the transcript proposed the moment below. You get \
 frames from the video and a transcript with timestamps. Decide whether it is \
 really worth making into a short.
 
-How the finished clip will look, so you can picture it: the moment is cropped \
-tight on the people to fill a vertical frame, every spoken word is captioned \
-word by word in heavy caps with coloured keywords, and a beat lands every 2 to \
-4 seconds (colour flash with a sound effect, punch-in zoom on a face, a prop \
-such as an arrow, circle, emoji or effort meter, or a 1 to 2 second cutaway to \
-a meme). The edit amplifies a moment that is already funny. It cannot create one.
+How the finished clip will look, so you can picture it: one bit, chopped to \
+its beats with every pause cut, cropped to a vertical frame (or two cameras \
+stacked), speech captioned one or two words at a time, stage directions in \
+meme slang (*REGRET*, *AURA LOSS*), colour flashes and classic meme sound \
+effects on the hits, and an ending that shows how it resolves. The edit \
+amplifies a moment that is already funny. It cannot create one.
 
 How to judge:
 - First say what the joke is in one plain sentence, as you would explain it \
@@ -117,8 +124,8 @@ too much context, or the visuals do not carry it.
 would be proud of, 70 is solid, 50 is a coin flip.
 - Set start_s and end_s for the best cut, to one decimal place, using the \
 transcript times. Start exactly where the setup begins (no dead air first) \
-and end just after the payoff or the reaction lands. Keep it between 15 and \
-55 seconds. You may move well away from the scout's times if the real moment \
+and end just after the payoff, the reaction or the resolution lands. The raw \
+window may run 15 to 70 seconds; the editor cuts it down. You may move well away from the scout's times if the real moment \
 sits a little earlier or later.
 - title: a short claim plus one emoji, in the style clip channels use, for \
 example "Speed actually lifted a car at the end 🥶". It must be true to what \

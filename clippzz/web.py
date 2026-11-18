@@ -31,6 +31,26 @@ templates.env.filters["ago"] = ago
 templates.env.filters["fromjson"] = lambda t: db.loads(t, []) or []
 templates.env.filters["fromjsonobj"] = lambda t: db.loads(t, {}) or {}
 
+
+def post_text(clip, vod) -> str:
+    """Title, credits and hashtags, ready to paste into YouTube, Instagram or Facebook."""
+    title = clip["title"] or ""
+    tags = [w for w in title.split() if w.startswith("#")]
+    for extra in ("#funny", "#streamer"):
+        if extra not in tags:
+            tags.append(extra)
+    channel = vod["channel"] or "the creator"
+    lines = [title, ""]
+    lines.append(f"Credit: {channel}" + (f" → {vod['channel_url']}" if vod["channel_url"] else ""))
+    lines.append(f"From: {vod['url']}")
+    if clip["music_credit"]:
+        lines.append(f"Music: {clip['music_credit']}")
+    lines += ["", " ".join(tags)]
+    return "\n".join(lines)
+
+
+templates.env.globals["post_text"] = post_text
+
 STATE_LABELS = {
     "queued": "Waiting", "fetching": "Fetching", "listening": "Listening",
     "scouting": "Scouting", "judging": "Judging", "done": "Done",

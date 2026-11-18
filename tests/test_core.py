@@ -82,5 +82,23 @@ class DbTest(unittest.TestCase):
         self.assertAlmostEqual(db.month_spend(conn), 6.0)
 
 
+class PostTextTest(unittest.TestCase):
+    def test_post_text_credits_creator_music_and_tags(self):
+        from clippzz.web import post_text
+        clip = {"title": "SPEED STEALS KAI CENAT'S WHOLE PLATE!!! \U0001F62D #ishowspeed #kaicenat",
+                "music_credit": "\"Monkeys Spinning Monkeys\" Kevin MacLeod (incompetech.com)"}
+        vod = {"channel": "IShowSpeed", "channel_url": "https://www.youtube.com/@IShowSpeed",
+               "url": "https://www.youtube.com/watch?v=Sm9Af2DPsqs"}
+        text = post_text(clip, vod)
+        self.assertTrue(text.startswith("SPEED STEALS"))
+        self.assertIn("Credit: IShowSpeed \u2192 https://www.youtube.com/@IShowSpeed", text)
+        self.assertIn("From: https://www.youtube.com/watch?v=Sm9Af2DPsqs", text)
+        self.assertIn("Music: \"Monkeys Spinning Monkeys\"", text)
+        self.assertTrue(text.endswith("#ishowspeed #kaicenat #funny #streamer"))
+        no_music = post_text({"title": "X!!!", "music_credit": None}, {**vod, "channel_url": None})
+        self.assertNotIn("Music:", no_music)
+        self.assertIn("Credit: IShowSpeed\n", no_music)
+
+
 if __name__ == "__main__":
     unittest.main()

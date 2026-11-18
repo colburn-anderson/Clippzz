@@ -123,7 +123,11 @@ def system_prompt(sound_names: list[str], music_names: list[str]) -> str:
             "fewer than one), and the same sound may come back when the context fits: "
             f"{'; '.join(sounds.label(n) for n in sound_names)}. Put each exactly where "
             "clip channels would, on a hit, a reaction or a beat change, never over an "
-            "important line. They play on top of the stream audio; long ones are cut to 4 s.")
+            "important line. Every sound must match what is on screen or what was just "
+            "said, the way its description says; the owner noticed one or two sounds "
+            "that felt random in an otherwise good clip, so leave a spot empty rather "
+            "than force a sound in. They play on top of the stream audio; long ones are "
+            "cut to 4 s.")
     else:
         sound_line = ("none available yet; leave sounds empty and use ending sound "
                       "\"none\".")

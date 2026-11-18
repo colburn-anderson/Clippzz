@@ -67,10 +67,13 @@ def connect() -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.executescript(SCHEMA)
-    try:  # databases made before the rerender column existed
-        conn.execute("ALTER TABLE clips ADD COLUMN rerender INTEGER NOT NULL DEFAULT 0")
-    except sqlite3.OperationalError:
-        pass
+    # Columns added after the first release: add them to older databases.
+    for table, column in (("clips", "rerender INTEGER NOT NULL DEFAULT 0"),
+                          ("clips", "music_credit TEXT"), ("vods", "channel_url TEXT")):
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
+        except sqlite3.OperationalError:
+            pass
     return conn
 
 

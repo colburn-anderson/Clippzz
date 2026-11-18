@@ -77,6 +77,11 @@
         <p class="small"><strong>Stage directions:</strong> {% for d in plan.stage_directions %}*{{ d.text.strip("*") }}*{{ ", " if not loop.last }}{% endfor %}</p>
       </details>
       {% endif %}
+      <details>
+        <summary>Post text (title, credits, hashtags)</summary>
+        <textarea class="posttext" rows="7" readonly>{{ post_text(c, vod) }}</textarea>
+        <button type="button" class="copy">Copy</button>
+      </details>
       <form class="row" method="post" action="/clips/{{ c.id }}/rate">
         <button class="good {{ 'on' if c.rating == 'good' }}" name="rating" value="good" type="submit">Post it</button>
         <button class="bad {{ 'on' if c.rating == 'bad' }}" name="rating" value="bad" type="submit">Not good enough</button>
@@ -118,6 +123,19 @@
 {% endif %}
 
 <script>
+// Copy the post text. The dashboard is plain http, where the modern clipboard
+// API is off, so this selects the text and uses the older copy command.
+document.querySelectorAll("button.copy").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    const box = btn.parentElement.querySelector("textarea.posttext");
+    box.focus(); box.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) {}
+    btn.textContent = ok ? "Copied" : "Selected: press Cmd+C";
+    setTimeout(function () { btn.textContent = "Copy"; }, 2500);
+  });
+});
+
 // Keep a draft of every note in this browser while it is typed, so a note is
 // never lost if the Pi is restarting when it is sent. Cleared once saved.
 (function () {

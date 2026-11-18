@@ -215,7 +215,8 @@ def make(conn, clip_id: int, keep: bool = False, rerender: bool = False) -> dict
             detail += f". Music credit for the description: {stats['music_credit']}"
         elif stats.get("music"):
             detail += f". Music: {stats['music']}"
-        db.set_clip(conn, clip_id, "done", detail, path=str(final), duration_s=stats["duration_s"], rerender=0)
+        db.set_clip(conn, clip_id, "done", detail, path=str(final), duration_s=stats["duration_s"], rerender=0,
+                    music_credit=stats.get("music_credit") or None)
         log.info("clip %s: done %s", clip_id, stats)
         return stats
     finally:
