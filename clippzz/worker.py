@@ -182,6 +182,9 @@ def main():
     log.info("worker started; scout=%s judge=%s budget=$%.2f/month",
              config.SCOUT_MODEL, config.JUDGE_MODEL, config.MONTHLY_BUDGET_USD)
     conn = db.connect()
+    resumed = db.requeue_interrupted_clips(conn)
+    if resumed:
+        log.info("requeued %s clip(s) interrupted by a restart", resumed)
     while True:
         if not run_once(conn):
             time.sleep(5)

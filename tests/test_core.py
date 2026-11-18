@@ -62,6 +62,13 @@ class DbTest(unittest.TestCase):
         self.assertEqual(db.next_vod(conn)["id"], "abcdefghijk")
         db.set_state(conn, "abcdefghijk", "done", "ok")
         self.assertIsNone(db.next_vod(conn))
+        conn.execute("INSERT INTO moments (vod_id, start_s, end_s) VALUES ('abcdefghijk', 1, 2)")
+        cid = db.add_clip(conn, 1)
+        self.assertEqual(db.next_clip(conn)["id"], cid)
+        db.set_clip(conn, cid, "working", "made by hand")
+        self.assertIsNone(db.next_clip(conn))           # the worker leaves it alone
+        self.assertEqual(db.requeue_interrupted_clips(conn), 1)
+        self.assertEqual(db.next_clip(conn)["id"], cid)  # until a restart requeues it
         cost = db.record_usage(conn, "abcdefghijk", "judge", "claude-opus-5-5", 1_000_000, 100_000)
         self.assertAlmostEqual(cost, 6.0)
         self.assertAlmostEqual(db.month_spend(conn), 6.0)

@@ -119,8 +119,18 @@ def set_clip(conn, clip_id: int, state: str, detail: str | None = None, **fields
 
 
 def next_clip(conn):
+    """Only queued clips. A clip someone is making by hand (python -m
+    clippzz.clipper) is "working" and must be left alone."""
     return conn.execute(
-        "SELECT * FROM clips WHERE state IN ('queued','working') ORDER BY created_at LIMIT 1").fetchone()
+        "SELECT * FROM clips WHERE state='queued' ORDER BY created_at LIMIT 1").fetchone()
+
+
+def requeue_interrupted_clips(conn) -> int:
+    """At worker start: clips left "working" by a crash or power cut go back in the queue."""
+    cur = conn.execute("UPDATE clips SET state='queued', detail='Resuming after a restart',"
+                       " updated_at=? WHERE state='working'", (time.time(),))
+    conn.commit()
+    return cur.rowcount
 
 
 def record_usage(conn, vod_id, step, model, input_tokens, output_tokens):
