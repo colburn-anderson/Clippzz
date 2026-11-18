@@ -83,32 +83,28 @@ class DbTest(unittest.TestCase):
 
 
 class PostTextTest(unittest.TestCase):
-    def test_post_parts_credit_featured_creators_music_and_moment_link(self):
+    def test_post_parts_credit_by_handle_without_links(self):
         from clippzz.web import post_parts
         clip = {"title": "SPEED STEALS KAI CENAT'S WHOLE PLATE!!! \U0001F62D #ishowspeed #kaicenat",
-                "music_credit": "\"Monkeys Spinning Monkeys\" Kevin MacLeod (incompetech.com)",
+                "music_credit": "\"Monkeys Spinning Monkeys\" by Kevin MacLeod (CC BY 4.0) https://x.org/by/4.0/",
                 "plan": '{"premise": "Speed takes the whole plate."}'}
         vod = {"channel": "IShowSpeed", "channel_url": "https://www.youtube.com/channel/UCxyz",
                "url": "https://www.youtube.com/watch?v=Sm9Af2DPsqs"}
         post = post_parts(clip, vod, 24734.0)
-        self.assertEqual(post["title"], clip["title"])
         d = post["description"]
-        self.assertTrue(d.startswith("Speed takes the whole plate."))
-        self.assertIn("Credit: IShowSpeed \u2192 https://www.youtube.com/@IShowSpeed", d)
-        self.assertIn("Featuring: Kai Cenat \u2192 https://www.youtube.com/@KaiCenat", d)
-        self.assertNotIn("Featuring: IShowSpeed", d)
-        self.assertIn("Original video: https://www.youtube.com/watch?v=Sm9Af2DPsqs&t=24734s", d)
-        self.assertIn("Music: \"Monkeys Spinning Monkeys\"", d)
-        self.assertTrue(d.endswith("#ishowspeed #kaicenat #funny #streamer #shorts"))
+        self.assertEqual(d, "Speed takes the whole plate.\n\nCredit: @IShowSpeed @KaiCenat\n"
+                            "Music: \"Monkeys Spinning Monkeys\" by Kevin MacLeod (CC BY 4.0)\n\n"
+                            "#ishowspeed #kaicenat #funny #streamer #shorts")
+        self.assertNotIn("http", d)
         self.assertTrue(post["caption"].startswith(clip["title"]))
         self.assertNotIn("#shorts", post["caption"])
 
-    def test_unknown_creator_uses_the_stored_channel_link(self):
+    def test_unknown_creator_uses_their_handle_or_name(self):
         from clippzz.web import post_parts
         post = post_parts({"title": "X!!!", "music_credit": None, "plan": None},
-                          {"channel": "Someone", "channel_url": "https://youtube.com/@someone",
+                          {"channel": "Someone", "channel_url": "https://www.youtube.com/@someone",
                            "url": "https://www.youtube.com/watch?v=abc"})
-        self.assertIn("Credit: Someone \u2192 https://youtube.com/@someone", post["description"])
+        self.assertIn("Credit: @someone", post["description"])
         self.assertNotIn("Music:", post["description"])
 
 

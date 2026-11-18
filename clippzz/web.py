@@ -1,4 +1,5 @@
 """The dashboard: paste a VOD link, watch progress, rate the moments found."""
+import re
 import time
 from pathlib import Path
 
@@ -41,29 +42,35 @@ CREATORS = {
 }
 
 
+def _handle(url: str | None) -> str | None:
+    m = re.search(r"youtube\.com/(@[\w.-]+)", url or "")
+    return m.group(1) if m else None
+
+
 def post_parts(clip, vod, moment_start=None) -> dict:
-    """Title, YouTube description and Instagram/Facebook caption for a clip."""
+    """Title, YouTube description and Instagram/Facebook caption for a clip.
+    No links: a new YouTube channel cannot use them until it is verified, so
+    creators are credited by @handle and the music by title, artist and licence."""
     title = (clip["title"] or "").strip()
     plan = db.loads(clip["plan"] if "plan" in clip.keys() else None, {}) or {}
     tags = [w for w in title.split() if w.startswith("#")]
     for extra in ("#funny", "#streamer"):
         if extra not in tags:
             tags.append(extra)
+    credits = []
     source = next((c for c in CREATORS.values() if c[0].lower() == (vod["channel"] or "").lower()), None)
-    source_name = vod["channel"] or "the creator"
-    source_url = source[1] if source else vod["channel_url"]
+    credits.append(_handle(source[1]) if source else (_handle(vod["channel_url"]) or vod["channel"] or ""))
+    for tag in tags:
+        known = CREATORS.get(tag.lstrip("#").lower())
+        if known and _handle(known[1]) not in credits:
+            credits.append(_handle(known[1]))
     lines = []
     if plan.get("premise"):
         lines += [plan["premise"].strip(), ""]
-    lines.append(f"Credit: {source_name}" + (f" \u2192 {source_url}" if source_url else ""))
-    for tag in tags:
-        known = CREATORS.get(tag.lstrip("#").lower())
-        if known and known[0] != source_name:
-            lines.append(f"Featuring: {known[0]} \u2192 {known[1]}")
-    link = vod["url"] + (f"&t={int(moment_start)}s" if moment_start else "")
-    lines.append(f"Original video: {link}")
+    lines.append("Credit: " + " ".join(c for c in credits if c))
     if clip["music_credit"]:
-        lines.append(f"Music: {clip['music_credit']}")
+        music = re.sub(r"\s*\(?https?://\S+\)?", "", clip["music_credit"]).strip().rstrip(",.")
+        lines.append(f"Music: {music}")
     lines += ["", " ".join(tags + ["#shorts"])]
     description = "\n".join(lines)
     return {"title": title, "description": description,
