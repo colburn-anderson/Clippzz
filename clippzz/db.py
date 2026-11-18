@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS clips (
     created_at REAL NOT NULL, updated_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS clips_moment ON clips(moment_id);
+CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
 """
 
 # States a VOD moves through, in order.
@@ -128,6 +129,19 @@ def next_clip(conn):
     clippzz.clipper) is "working" and must be left alone."""
     return conn.execute(
         "SELECT * FROM clips WHERE state='queued' ORDER BY created_at LIMIT 1").fetchone()
+
+
+def set_setting(conn, key: str, value):
+    """Facts the worker publishes for the dashboard, such as the spending cap
+    it enforces (the dashboard never reads the worker's private settings file)."""
+    conn.execute("INSERT INTO settings (key, value) VALUES (?, ?)"
+                 " ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, str(value)))
+    conn.commit()
+
+
+def get_setting(conn, key: str, default=None):
+    row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    return row[0] if row else default
 
 
 def queue_rerender(conn, clip_id: int):

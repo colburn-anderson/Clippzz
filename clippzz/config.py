@@ -25,7 +25,10 @@ SCOUT_MODEL = os.environ.get("CLIPPZZ_SCOUT_MODEL", "claude-haiku-5-5")
 JUDGE_MODEL = os.environ.get("CLIPPZZ_JUDGE_MODEL", "claude-opus-5-5")
 # Planner watches a moment frame by frame and writes the edit, so also strong.
 PLANNER_MODEL = os.environ.get("CLIPPZZ_PLANNER_MODEL", "claude-opus-5-5")
-PLANNER_EFFORT = os.environ.get("CLIPPZZ_PLANNER_EFFORT", "high")
+# "high" made clip 3, which the owner called perfect, for $0.58. "medium" is
+# being tested from November 18, 2026 to cut the cost to about $0.40; each
+# clip records the settings it was planned with, so ratings can be compared.
+PLANNER_EFFORT = os.environ.get("CLIPPZZ_PLANNER_EFFORT", "medium")
 
 # Captions come from faster-whisper running on the Pi. small.en is the most
 # accurate model that still runs in a couple of minutes per clip on a Pi 4.

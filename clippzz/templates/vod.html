@@ -73,6 +73,7 @@
         <p class="small"><strong>Premise:</strong> {{ plan.premise }}<br>
           <strong>Fit for the format:</strong> {{ plan.fit }}. {{ plan.fit_reason }}</p>
         <ol class="tight small">{% for b in plan.beats %}<li>{{ "%.1f"|format(b.start_s) }} to {{ "%.1f"|format(b.end_s) }} s: {{ b.shows }}{% if b.zoom > 1.05 %} (punch-in){% endif %}</li>{% endfor %}</ol>
+        {% if plan._settings %}<p class="small dim">Planned by {{ plan._settings.model }} at {{ plan._settings.effort }} effort from {{ plan._settings.frames }} frames for ${{ "%.2f"|format(plan._settings.cost_usd) }}.</p>{% endif %}
         <p class="small"><strong>Stage directions:</strong> {% for d in plan.stage_directions %}*{{ d.text.strip("*") }}*{{ ", " if not loop.last }}{% endfor %}</p>
       </details>
       {% endif %}

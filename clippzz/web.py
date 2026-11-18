@@ -54,11 +54,12 @@ def home(request: Request, error: str = ""):
             " (SELECT COALESCE(SUM(cost_usd),0) FROM usage u WHERE u.vod_id=v.id) AS cost"
             " FROM vods v ORDER BY v.created_at DESC").fetchall()
         spent = db.month_spend(conn)
+        budget = float(db.get_setting(conn, "monthly_budget_usd", config.MONTHLY_BUDGET_USD))
         # The week 1 gate counts finished clips, not moments.
         rated = conn.execute(
             "SELECT rating FROM clips WHERE rating IS NOT NULL ORDER BY rated_at DESC LIMIT 10").fetchall()
     return templates.TemplateResponse(request, "home.html", {
-        "vods": vods, "spent": spent, "budget": config.MONTHLY_BUDGET_USD,
+        "vods": vods, "spent": spent, "budget": budget,
         "labels": STATE_LABELS, "error": error,
         "last10_good": sum(1 for r in rated if r["rating"] == "good"), "last10": len(rated),
         "busy": any(v["state"] in db.ACTIVE_STATES for v in vods),

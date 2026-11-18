@@ -195,6 +195,8 @@ def make(conn, clip_id: int, keep: bool = False, rerender: bool = False) -> dict
                 sound_names=sounds.choices(), music_names=list(sounds.music()))
             cost = db.record_usage(conn, vod["id"], "plan", config.PLANNER_MODEL, tin, tout)
             plan = planner.tidy(plan, words, info["duration"])
+            plan["_settings"] = {"model": config.PLANNER_MODEL, "effort": config.PLANNER_EFFORT,
+                                 "frames": len(frames), "cost_usd": round(cost, 3)}
             db.set_clip(conn, clip_id, "working", "Rendering", plan=json.dumps(plan),
                         title=plan.get("title"), cost_usd=round(cost, 4))
             log.info("clip %s: plan cost $%.3f (%s in, %s out tokens)", clip_id, cost, tin, tout)
