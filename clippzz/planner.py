@@ -235,8 +235,9 @@ def format_ranges(times: list[float], step: float = 0.5) -> str:
 
 def plan_clip(meta: dict, moment: dict, frames, words, loud_times, duration: float,
               src_w: int, src_h: int, *, moment_span=None, disagreements=(), owner_notes=(),
-              sound_names=(), music_names=(), app_songs=()):
-    """Returns (plan, input_tokens, output_tokens)."""
+              sound_names=(), music_names=(), app_songs=(), parts_note=""):
+    """Returns (plan, input_tokens, output_tokens). parts_note describes the
+    parts of the stream when the footage joins several."""
     sound_names, music_names, app_songs = list(sound_names), list(music_names), list(app_songs)
     span = (f"The reviewer's cut of the moment runs from {moment_span[0]:.1f}s to "
             f"{moment_span[1]:.1f}s; the rest is context before it and the aftermath "
@@ -253,7 +254,7 @@ def plan_clip(meta: dict, moment: dict, frames, words, loud_times, duration: flo
         f"On screen: {moment.get('visual')}\n\n"
         f"The channel owner's feedback on earlier clips and moments (follow it):\n{notes}\n\n"
         f"This section of the stream is {duration:.1f} seconds long; every time below is "
-        f"seconds from its start. The source frame is {src_w}x{src_h}.\n{span}\n"
+        f"seconds from its start. The source frame is {src_w}x{src_h}.\n{span}{parts_note}\n"
         f"Transcript, word by word with start times:\n{format_words(words)}\n\n"
         f"Where the two machine transcripts disagreed:\n{diffs}\n\n"
         f"Loudest stretches (shouting, impacts): {format_ranges(loud_times)}\n\n"
@@ -385,9 +386,16 @@ def _box(b) -> list[float] | None:
     return [l, t, r, bt] if r - l > 0.02 and bt - t > 0.02 else None
 
 
-def tidy(plan: dict, words, duration: float) -> dict:
+def _split(s: float, e: float, bounds) -> list[tuple[float, float]]:
+    """(s, e) cut at every bound strictly inside it."""
+    edges = [s, *(x for x in sorted(bounds) if s + 0.01 < x < e - 0.01), e]
+    return list(zip(edges, edges[1:]))
+
+
+def tidy(plan: dict, words, duration: float, bounds=()) -> dict:
     """Keeps beats inside the section, in order, not overlapping, with their
-    edges moved out of the middle of words and their framing in range."""
+    edges moved out of the middle of words and their framing in range. bounds
+    are the joins between parts of the stream: a beat never runs across one."""
     beats = []
     for b in sorted(plan.get("beats", []), key=lambda b: b["start_s"]):
         s = _clamp(b["start_s"], 0.0, duration)
@@ -397,19 +405,20 @@ def tidy(plan: dict, words, duration: float) -> dict:
                 s = max(ws - 0.03, 0.0) if s - ws < we - s else we + 0.01
             if ws < e < we:  # ends mid-word
                 e = min(we + 0.05, duration) if we - e < e - ws else ws - 0.01
-        if beats and s < beats[-1]["end_s"]:
-            s = beats[-1]["end_s"]
-        if e - s < 0.25:
-            continue
         top, bottom = _box(b.get("top_box")), _box(b.get("bottom_box"))
         layout = "stack" if b.get("layout") == "stack" and top and bottom else "single"
         fx = _clamp(b.get("focus_x", 0.5), 0.0, 1.0)
         fy = _clamp(b.get("focus_y", 0.45), 0.0, 1.0)
-        beats.append({**b, "start_s": round(s, 3), "end_s": round(e, 3), "layout": layout,
-                      "top_box": top, "bottom_box": bottom, "focus_x": fx, "focus_y": fy,
-                      "focus_x_end": _clamp(b.get("focus_x_end", fx), 0.0, 1.0),
-                      "focus_y_end": _clamp(b.get("focus_y_end", fy), 0.0, 1.0),
-                      "zoom": _clamp(b.get("zoom", 1.0), 1.0, 3.0)})
+        framing = {"layout": layout, "top_box": top, "bottom_box": bottom, "focus_x": fx, "focus_y": fy,
+                   "focus_x_end": _clamp(b.get("focus_x_end", fx), 0.0, 1.0),
+                   "focus_y_end": _clamp(b.get("focus_y_end", fy), 0.0, 1.0),
+                   "zoom": _clamp(b.get("zoom", 1.0), 1.0, 3.0)}
+        for ps, pe in _split(s, e, bounds):
+            if beats and ps < beats[-1]["end_s"]:
+                ps = beats[-1]["end_s"]
+            if pe - ps < 0.25:
+                continue
+            beats.append({**b, "start_s": round(ps, 3), "end_s": round(pe, 3), **framing})
     plan["beats"] = beats
     ending = plan.get("ending") or {}
     plan["ending"] = {"freeze_s": _clamp(ending.get("freeze_s", 0), 0.0, 3.5),

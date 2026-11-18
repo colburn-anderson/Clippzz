@@ -186,7 +186,7 @@ class CaptionCrossCheckTest(unittest.TestCase):
 
     def test_frames_thin_out_around_the_moment(self):
         frames = [(i / 2, b"") for i in range(20)]  # 0.0 to 9.5 s, two a second
-        kept = [t for t, _ in clipper.thin_frames(frames, 3.0, 6.0)]
+        kept = [t for t, _ in clipper.thin_frames(frames, [(3.0, 6.0)])]
         self.assertIn(3.5, kept)                     # inside: every frame
         self.assertNotIn(1.5, kept)                  # outside: one a second
         self.assertIn(1.0, kept)

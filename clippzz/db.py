@@ -70,7 +70,10 @@ def connect() -> sqlite3.Connection:
     # Columns added after the first release: add them to older databases.
     for table, column in (("clips", "rerender INTEGER NOT NULL DEFAULT 0"),
                           ("clips", "music_credit TEXT"), ("vods", "channel_url TEXT"),
-                          ("clips", "posted_at REAL")):
+                          ("clips", "posted_at REAL"),
+                          # JSON list of the parts of the stream a clip is cut from, with
+                          # where each starts on the clip's timeline; "[]" when it is one.
+                          ("clips", "parts TEXT")):
         try:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
         except sqlite3.OperationalError:

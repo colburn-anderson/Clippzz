@@ -489,18 +489,32 @@ def sticker_events(stickers: list[dict], beats: list[Beat], src_w: int, src_h: i
 AUDIO_FMT = "aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo"
 
 
-def ffmpeg_command(src: Path, beats: list[Beat], hits: list[Hit], cues: list[Cue],
+def source_at(t: float, src) -> tuple[Path, float]:
+    """Which file holds time t of the clip's footage, and where in that file.
+    src is one file, or [(file, at, dur)] for footage joined from several parts
+    of the stream, each starting at "at" on the footage's timeline."""
+    if isinstance(src, (str, Path)):
+        return Path(src), t
+    for path, at, dur in src:
+        if t < at + dur - 1e-3:
+            return Path(path), max(t - at, 0.0)
+    path, at, _ = src[-1]
+    return Path(path), max(t - at, 0.0)
+
+
+def ffmpeg_command(src, beats: list[Beat], hits: list[Hit], cues: list[Cue],
                    sound_files: dict[str, tuple[Path, float]], ass_path: Path, out_path: Path,
                    src_w: int, src_h: int, stickers: list[tuple[Sticker, Path]] = (),
                    freeze_s: float = 0.0, tint: str = "none",
                    music: tuple[Path, float] | None = None) -> list[str]:
-    """sound_files: name -> (file, mix volume); stickers: (sticker, png);
-    music: (file, volume) or None."""
+    """src: the footage, one file or parts (see source_at); sound_files: name ->
+    (file, mix volume); stickers: (sticker, png); music: (file, volume) or None."""
     cmd = ["ffmpeg", "-v", "error", "-y"]
     end_beats = total(beats)
     end_all = end_beats + freeze_s
     for b in beats:
-        cmd += ["-ss", f"{b.src_s:.3f}", "-t", f"{b.dur + 0.1:.3f}", "-i", str(src)]
+        path, local = source_at(b.src_s, src)
+        cmd += ["-ss", f"{local:.3f}", "-t", f"{b.dur + 0.1:.3f}", "-i", str(path)]
     n = len(beats)
     for c in cues:
         cmd += ["-i", str(sound_files[c.name][0])]
@@ -595,9 +609,10 @@ def ffmpeg_command(src: Path, beats: list[Beat], hits: list[Hit], cues: list[Cue
 
 
 
-def render(src: Path, plan: dict, words, out_path: Path, src_w: int, src_h: int,
+def render(src, plan: dict, words, out_path: Path, src_w: int, src_h: int,
            loud=None, timeout: int = 1800) -> dict:
-    """Renders the plan to out_path. Returns what was placed, for the record."""
+    """Renders the plan to out_path from src, one file or parts (see
+    source_at). Returns what was placed, for the record."""
     beats = build_timeline(plan["beats"])
     if not beats:
         raise RuntimeError("the plan has no usable beats")
