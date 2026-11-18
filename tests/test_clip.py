@@ -255,6 +255,29 @@ class LibraryTest(unittest.TestCase):
         self.assertTrue(path.exists() and path.stat().st_size > 500)
 
 
+class PanAndReframeTest(unittest.TestCase):
+    def test_still_and_panning_crops(self):
+        still = render.build_timeline([{"start_s": 0, "end_s": 2, "focus_x": 0.5, "focus_y": 0.5, "zoom": 1}])[0]
+        self.assertEqual(render.crop_filter(still, 1920, 1080), "crop=606:1080:657:0")
+        pan = render.build_timeline([{"start_s": 0, "end_s": 2, "focus_x": 0.3, "focus_y": 0.5, "zoom": 1,
+                                      "focus_x_end": 0.8, "focus_y_end": 0.5}])[0]
+        f = render.crop_filter(pan, 1920, 1080)
+        self.assertTrue(f.startswith("crop=w=606:h=1080:x='273+"))
+        self.assertIn("*t/2.000'", f)
+        self.assertNotIn(",", f)                      # safe inside a filter chain
+
+    def test_framed_pieces_cover_each_beat(self):
+        beats = [{"start_s": 10.0, "end_s": 14.0, "shows": "serve and miss"},
+                 {"start_s": 20.0, "end_s": 22.0, "shows": "laugh"}]
+        framed = [{"start_s": 10.0, "end_s": 11.5, "focus_x": 0.5, "focus_y": 0.4},
+                  {"start_s": 11.5, "end_s": 14.2, "focus_x": 0.8, "focus_y": 0.6, "focus_x_end": 0.6}]
+        out = planner._fit_to_beats(framed, beats)
+        self.assertEqual([(b["start_s"], b["end_s"]) for b in out], [(10.0, 11.5), (11.5, 14.0), (20.0, 22.0)])
+        self.assertEqual(out[1]["focus_x"], 0.8)
+        self.assertEqual(out[1]["shows"], "serve and miss")
+        self.assertEqual(out[2]["shows"], "laugh")    # uncovered beat kept as it was
+
+
 class CommandTest(unittest.TestCase):
     def test_ffmpeg_command(self):
         beats = render.build_timeline(BEATS)

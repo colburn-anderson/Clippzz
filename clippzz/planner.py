@@ -97,7 +97,10 @@ freeze_s 0.
 give focus_x and focus_y (0 to 1 across and down the source frame) on what the \
 viewer must see, and a zoom: 1.0 shows the full source height (on a 16:9 \
 source about a third of its width), 1.2 to 1.6 is a punch-in, up to 3 to fill \
-the frame with a small facecam. Layout "stack": two crops, one above the \
+the frame with a small facecam. If the subject moves across the frame during a beat, set focus_x_end and \
+focus_y_end to where it ends up and the window pans smoothly; otherwise make \
+them equal to the start. If the camera cuts inside a beat, split the beat at \
+the cut so each shot gets its own framing. Layout "stack": two crops, one above the \
 other, each half the frame: give top_box and bottom_box as [left, top, right, \
 bottom] (0 to 1) around each face or action. Use stack when two people react \
 on two cams (both facecams over gameplay), or for a reaction plus what they \
@@ -170,7 +173,7 @@ def schema(sound_names: list[str], music_names: list[str], app_names=()) -> dict
             "start_s": num, "end_s": num,
             "shows": {"type": "string", "description": "What this beat shows, in a few words."},
             "layout": {"type": "string", "enum": ["single", "stack"]},
-            "focus_x": num, "focus_y": num, "zoom": num,
+            "focus_x": num, "focus_y": num, "focus_x_end": num, "focus_y_end": num, "zoom": num,
             "top_box": box, "bottom_box": box,
         })},
         "stage_directions": {"type": "array", "items": _obj({
@@ -283,6 +286,88 @@ def plan_clip(meta: dict, moment: dict, frames, words, loud_times, duration: flo
     return plan, *ranker._usage(response)
 
 
+REFRAME_SYSTEM = """\
+You frame a vertical 9:16 Short that has already been edited. Each beat below \
+is a stretch of a 16:9 source video, and the frames show it twice a second. \
+A 9:16 window at zoom 1.0 covers the full height and about a third of the \
+width, so a wrong focus point shows empty floor or sky. For every beat:
+
+- If the camera cuts to a different shot inside the beat, split the beat at \
+the cut, so each shot is framed on its own. The pieces must cover the beat \
+exactly, in order, with no gaps.
+- Aim focus_x and focus_y (0 to 1 across and down the source frame) at the \
+person or action the viewer must see in that shot: usually the face of the \
+person talking or reacting, or the player hitting the ball.
+- If that person moves across the frame during the shot, set focus_x_end and \
+focus_y_end to where they are at its end; the window pans in a straight line. \
+Otherwise make the end equal to the start.
+- zoom 1.0 is the full height; use 1.2 to 1.6 only for a close reaction, and \
+never zoom so far that the action leaves the window. A small facecam can take \
+up to 3.
+- layout "stack" (top_box and bottom_box as [left, top, right, bottom], 0 to \
+1) only when two people in different parts of the frame both matter, such as \
+two facecams. Otherwise "single", with both boxes [0, 0, 1, 1].
+
+Keep each beat's "shows" text. Times are seconds in the source section."""
+
+REFRAME_SCHEMA = _obj({"beats": {"type": "array", "items": _obj({
+    "start_s": {"type": "number"}, "end_s": {"type": "number"}, "shows": {"type": "string"},
+    "layout": {"type": "string", "enum": ["single", "stack"]},
+    "focus_x": {"type": "number"}, "focus_y": {"type": "number"},
+    "focus_x_end": {"type": "number"}, "focus_y_end": {"type": "number"}, "zoom": {"type": "number"},
+    "top_box": {"type": "array", "items": {"type": "number"}},
+    "bottom_box": {"type": "array", "items": {"type": "number"}},
+})}})
+
+
+def reframe(plan: dict, frames, src_w: int, src_h: int):
+    """A second, cheaper look that only fixes framing: it sees just the kept
+    seconds and returns the beats split at camera cuts, aimed and panned at the
+    subject. Returns (beats, input_tokens, output_tokens)."""
+    beats = plan.get("beats", [])
+    content = [{"type": "text", "text": f"Source frame {src_w}x{src_h}. The beats, in order:"}]
+    for i, b in enumerate(beats):
+        content.append({"type": "text", "text": f"Beat {i + 1}: {b['start_s']:.2f} to {b['end_s']:.2f} s, "
+                                                f"shows: {b.get('shows', '')}"})
+        for t, jpeg in frames:
+            if b["start_s"] - 0.3 <= t <= b["end_s"] + 0.3:
+                content.append({"type": "text", "text": f"t={t:.1f}"})
+                content.append({"type": "image", "source": {
+                    "type": "base64", "media_type": "image/jpeg",
+                    "data": base64.standard_b64encode(jpeg).decode()}})
+    content.append({"type": "text", "text": "Return the framed beats."})
+    with ranker.client().beta.messages.stream(
+        model=config.PLANNER_MODEL, max_tokens=16000,
+        betas=["server-side-fallback-2026-07-01"], fallbacks="default",
+        system=REFRAME_SYSTEM, thinking={"type": "adaptive"},
+        output_config={"effort": "low", "format": {"type": "json_schema", "schema": REFRAME_SCHEMA}},
+        messages=[{"role": "user", "content": content}],
+    ) as stream:
+        response = stream.get_final_message()
+    framed = ranker._parse(response, "reframe").get("beats", [])
+    return _fit_to_beats(framed, beats), *ranker._usage(response)
+
+
+def _fit_to_beats(framed: list[dict], beats: list[dict]) -> list[dict]:
+    """Keep only framed pieces inside the original beats, and fall back to an
+    original beat wherever the framing pass left it uncovered."""
+    out = []
+    for b in beats:
+        pieces = sorted((f for f in framed if f["start_s"] < b["end_s"] - 0.05 and f["end_s"] > b["start_s"] + 0.05),
+                        key=lambda f: f["start_s"])
+        if not pieces:
+            out.append(b)
+            continue
+        t = b["start_s"]
+        for k, f in enumerate(pieces):
+            end = b["end_s"] if k == len(pieces) - 1 else min(max(f["end_s"], t + 0.2), b["end_s"])
+            if end - t < 0.1:
+                continue
+            out.append({**b, **f, "start_s": round(t, 3), "end_s": round(end, 3), "shows": b.get("shows", "")})
+            t = end
+    return out
+
+
 def _clamp(v, lo, hi):
     try:
         return min(max(float(v), lo), hi)
@@ -315,10 +400,12 @@ def tidy(plan: dict, words, duration: float) -> dict:
             continue
         top, bottom = _box(b.get("top_box")), _box(b.get("bottom_box"))
         layout = "stack" if b.get("layout") == "stack" and top and bottom else "single"
+        fx = _clamp(b.get("focus_x", 0.5), 0.0, 1.0)
+        fy = _clamp(b.get("focus_y", 0.45), 0.0, 1.0)
         beats.append({**b, "start_s": round(s, 3), "end_s": round(e, 3), "layout": layout,
-                      "top_box": top, "bottom_box": bottom,
-                      "focus_x": _clamp(b.get("focus_x", 0.5), 0.0, 1.0),
-                      "focus_y": _clamp(b.get("focus_y", 0.45), 0.0, 1.0),
+                      "top_box": top, "bottom_box": bottom, "focus_x": fx, "focus_y": fy,
+                      "focus_x_end": _clamp(b.get("focus_x_end", fx), 0.0, 1.0),
+                      "focus_y_end": _clamp(b.get("focus_y_end", fy), 0.0, 1.0),
                       "zoom": _clamp(b.get("zoom", 1.0), 1.0, 3.0)})
     plan["beats"] = beats
     ending = plan.get("ending") or {}

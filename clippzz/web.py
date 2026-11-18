@@ -156,6 +156,7 @@ def healthz():
 # The steps a clip goes through, as the clip maker reports them.
 CLIP_STEPS = [("Download", "Downloading"), ("Captions", "Writing captions"), ("Frames", "Looking at"),
               ("Plan", "Planning"), ("Render", "Rendering")]
+# A re-render that fixes the framing reports "Looking at the frames to fix the framing" (Frames).
 
 
 def clip_step(state: str, detail: str | None) -> int:

@@ -74,6 +74,8 @@ class Beat:
     layout: str = "single"          # or "stack": top_box over bottom_box
     top_box: list | None = None     # [left, top, right, bottom], 0 to 1
     bottom_box: list | None = None
+    focus_x_end: float | None = None  # where the window has panned to by the beat's end
+    focus_y_end: float | None = None
 
     @property
     def dur(self) -> float:
@@ -130,7 +132,8 @@ def build_timeline(beats: list[dict]) -> list[Beat]:
         stack = b.get("layout") == "stack" and b.get("top_box") and b.get("bottom_box")
         out.append(Beat(b["start_s"], b["start_s"] + dur, round(t, 4),
                         b.get("focus_x", 0.5), b.get("focus_y", 0.45), b.get("zoom", 1.0),
-                        "stack" if stack else "single", b.get("top_box"), b.get("bottom_box")))
+                        "stack" if stack else "single", b.get("top_box"), b.get("bottom_box"),
+                        b.get("focus_x_end"), b.get("focus_y_end")))
         t += dur
     return out
 
@@ -405,6 +408,20 @@ def crop_box(src_w: int, src_h: int, fx: float, fy: float, zoom: float) -> tuple
     return cw, ch, int(x), int(y)
 
 
+def crop_filter(b: Beat, src_w: int, src_h: int) -> str:
+    """The crop for a single-layout beat: still, or panning in a straight line
+    from the start focus to the end focus over the beat."""
+    cw, ch, x0, y0 = crop_box(src_w, src_h, b.focus_x, b.focus_y, b.zoom)
+    fx_end = b.focus_x if b.focus_x_end is None else b.focus_x_end
+    fy_end = b.focus_y if b.focus_y_end is None else b.focus_y_end
+    _, _, x1, y1 = crop_box(src_w, src_h, fx_end, fy_end, b.zoom)
+    if abs(x1 - x0) < 4 and abs(y1 - y0) < 4:
+        return f"crop={cw}:{ch}:{x0}:{y0}"
+    dur = max(b.dur, 0.1)
+    # t runs from 0 to the beat's length, so t/dur goes 0 to 1 (no comma needed).
+    return f"crop=w={cw}:h={ch}:x='{x0}+{x1 - x0}*t/{dur:.3f}':y='{y0}+{y1 - y0}*t/{dur:.3f}'"
+
+
 def box_window(src_w: int, src_h: int, box, aspect: float) -> tuple[int, int, int, int]:
     """The smallest window of the given width/height ratio that covers a box
     ([left, top, right, bottom], 0 to 1) with a little margin."""
@@ -505,8 +522,7 @@ def ffmpeg_command(src: Path, beats: list[Beat], hits: list[Hit], cues: list[Cue
             graph.append(f"[pb{i}]crop={bw}:{bh}:{bx}:{by},scale={W}:{PANEL_H}:flags=bicubic[qb{i}]")
             graph.append(f"[qt{i}][qb{i}]vstack=inputs=2,setsar=1,fps={FPS},format=yuv420p[v{i}]")
         else:
-            cw, ch, x, y = crop_box(src_w, src_h, b.focus_x, b.focus_y, b.zoom)
-            graph.append(f"{trim},crop={cw}:{ch}:{x}:{y},scale={W}:{H}:flags=bicubic,setsar=1,"
+            graph.append(f"{trim},{crop_filter(b, src_w, src_h)},scale={W}:{H}:flags=bicubic,setsar=1,"
                          f"fps={FPS},format=yuv420p[v{i}]")
         graph.append(f"[{i}:a]{AUDIO_FMT},atrim=duration={b.dur:.4f},asetpts=PTS-STARTPTS,"
                      f"apad=whole_dur={b.dur:.4f},afade=t=in:d=0.01,"

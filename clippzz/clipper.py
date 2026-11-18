@@ -132,7 +132,18 @@ def _top(levels: list[float], fraction: float) -> float:
     return ordered[min(len(ordered) - 1, int(len(ordered) * (1 - fraction)))]
 
 
-def make(conn, clip_id: int, keep: bool = False, rerender: bool = False) -> dict:
+def frame_pass(conn, clip_id, vod_id, plan, frames, words, info) -> tuple[dict, float]:
+    """The framing pass: split beats at camera cuts and aim or pan the crop at
+    the subject. Returns the updated plan and what it cost."""
+    beats, tin, tout = planner.reframe(plan, frames, info["width"], info["height"])
+    cost = db.record_usage(conn, vod_id, "reframe", config.PLANNER_MODEL, tin, tout)
+    log.info("clip %s: framing pass cost $%.3f, %d beats -> %d shots", clip_id, cost,
+             len(plan.get("beats", [])), len(beats))
+    plan = planner.tidy({**plan, "beats": beats}, words, info["duration"])
+    return plan, cost
+
+
+def make(conn, clip_id: int, keep: bool = False, rerender: bool = False, reframe: bool = False) -> dict:
     clip = conn.execute("SELECT * FROM clips WHERE id=?", (clip_id,)).fetchone()
     if not clip:
         raise ValueError(f"no clip {clip_id}")
@@ -171,6 +182,13 @@ def make(conn, clip_id: int, keep: bool = False, rerender: bool = False) -> dict
 
         if rerender:
             plan, words = json.loads(clip["plan"]), json.loads(clip["words"])
+            if reframe:
+                db.check_budget(conn)
+                step("Looking at the frames to fix the framing")
+                plan, fcost = frame_pass(conn, clip_id, vod["id"], plan,
+                                         extract_frames(src, wd, info["v_off"]), words, info)
+                db.set_clip(conn, clip_id, "working", "Rendering", plan=json.dumps(plan),
+                            cost_usd=round((clip["cost_usd"] or 0) + fcost, 4))
         else:
             step("Writing captions from the audio")
             # The reviewer's notes name people and quote the key lines, which
@@ -183,7 +201,8 @@ def make(conn, clip_id: int, keep: bool = False, rerender: bool = False) -> dict
                      clip_id, len(words), len(diffs))
             db.set_clip(conn, clip_id, "working", "Looking at the frames", words=json.dumps(words))
             span = (m["start_s"] - start, m["end_s"] - start)
-            frames = thin_frames(extract_frames(src, wd, info["v_off"]), span[0] - 1, span[1] + 1)
+            all_frames = extract_frames(src, wd, info["v_off"])
+            frames = thin_frames(all_frames, span[0] - 1, span[1] + 1)
             loud_cut = _top(levels, 0.15)
             loud_times = [round(info["a_off"] + i * 0.5, 1) for i, v in enumerate(levels) if v >= loud_cut]
             db.check_budget(conn)
@@ -195,6 +214,9 @@ def make(conn, clip_id: int, keep: bool = False, rerender: bool = False) -> dict
                 sound_names=sounds.choices(), music_names=list(sounds.music()), app_songs=sounds.app_songs())
             cost = db.record_usage(conn, vod["id"], "plan", config.PLANNER_MODEL, tin, tout)
             plan = planner.tidy(plan, words, info["duration"])
+            step("Planning the edit: fixing the framing")
+            plan, fcost = frame_pass(conn, clip_id, vod["id"], plan, all_frames, words, info)
+            cost += fcost
             if str(plan.get("music", "")).startswith("app: "):  # the owner adds it in the app
                 name = plan["music"][5:]
                 song = next((s for s in sounds.app_songs() if s["name"] == name), {"name": name, "part": ""})
@@ -233,6 +255,7 @@ def main():
     ap.add_argument("--moment", type=int, help="moment id: make a new clip from it")
     ap.add_argument("--clip", type=int, help="clip id: run this clip again")
     ap.add_argument("--rerender", action="store_true", help="reuse the clip's saved plan and words")
+    ap.add_argument("--reframe", action="store_true", help="with --rerender: fix the framing first (a few cents)")
     ap.add_argument("--keep", action="store_true", help="keep the scratch files (for re-renders)")
     ap.add_argument("--here", action="store_true",
                     help="run in this process instead of the worker's queue (stop the worker first)")
@@ -244,7 +267,7 @@ def main():
         # The worker does the work, so two processes never touch the same clip.
         with db.session() as conn:
             if args.clip and args.rerender:
-                db.queue_rerender(conn, args.clip)
+                db.queue_rerender(conn, args.clip, reframe=args.reframe)
                 print(f"clip {args.clip} queued to render again; watch: docker compose logs -f worker")
             elif args.moment:
                 cid = db.add_clip(conn, args.moment)

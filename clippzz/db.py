@@ -148,12 +148,13 @@ def get_setting(conn, key: str, default=None):
     return row[0] if row else default
 
 
-def queue_rerender(conn, clip_id: int):
-    """Ask the worker to render a clip again from its saved plan (no API cost).
-    Going through the worker means only one process ever touches a clip."""
-    conn.execute("UPDATE clips SET state='queued', rerender=1, attempts=0,"
+def queue_rerender(conn, clip_id: int, reframe: bool = False):
+    """Ask the worker to render a clip again from its saved plan (no API cost),
+    or with reframe=True after a framing pass (a few cents). Going through the
+    worker means only one process ever touches a clip."""
+    conn.execute("UPDATE clips SET state='queued', rerender=?, attempts=0,"
                  " detail='Waiting to render again', updated_at=? WHERE id=? AND plan IS NOT NULL",
-                 (time.time(), clip_id))
+                 (2 if reframe else 1, time.time(), clip_id))
     conn.commit()
 
 
