@@ -32,16 +32,27 @@ SECTION_FORMAT = ("137+140/299+140/bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]"
                   "/bv*[height<=1080]+ba/b[height<=1080]/b")
 
 
-def fetch_section(vid: str, start_s: float, end_s: float, wd: Path, name: str = "src") -> Path:
-    r = sources._run([*sources.YTDLP, "-q", "-f", SECTION_FORMAT,
-                      "--download-sections", f"*{start_s:.2f}-{end_s:.2f}",
-                      "--merge-output-format", "mp4", "-o", str(wd / f"{name}.%(ext)s"),
-                      f"https://www.youtube.com/watch?v={vid}"], timeout=900)
+def fetch_section(vid: str, start_s: float, end_s: float, wd: Path, name: str = "src",
+                  tries: int = 3) -> Path:
+    """Downloads start_s to end_s in HD. YouTube now and then drops one request
+    (ffmpeg exits with code 8), so a failed download is tried again before the
+    whole clip, and every part already downloaded, has to start over."""
     src = wd / f"{name}.mp4"
-    if r.returncode != 0 or not src.exists():
-        raise sources.SourceError("HD section download failed: "
-                                  + r.stderr.decode(errors="replace").strip()[-300:])
-    return src
+    for attempt in range(1, tries + 1):
+        r = sources._run([*sources.YTDLP, "-q", "-f", SECTION_FORMAT,
+                          "--download-sections", f"*{start_s:.2f}-{end_s:.2f}",
+                          "--merge-output-format", "mp4", "-o", str(wd / f"{name}.%(ext)s"),
+                          f"https://www.youtube.com/watch?v={vid}"], timeout=900)
+        if r.returncode == 0 and src.exists():
+            return src
+        error = r.stderr.decode(errors="replace").strip()[-300:]
+        if attempt < tries:
+            log.info("download of %.0f-%.0f s failed (try %d), trying again: %s",
+                     start_s, end_s, attempt, error[-120:])
+            for leftover in wd.glob(f"{name}.*"):
+                leftover.unlink(missing_ok=True)
+            time.sleep(10 * attempt)
+    raise sources.SourceError("HD section download failed: " + error)
 
 
 def probe(path: Path) -> dict:

@@ -3,9 +3,11 @@ captions, laying them out, keeping beats inside one part, and rendering each
 shot from the right file. No network, no API key, no ffmpeg run."""
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 os.environ.setdefault("CLIPPZZ_DATA", tempfile.mkdtemp())
 os.environ.setdefault("CLIPPZZ_WORK", tempfile.mkdtemp())
@@ -119,6 +121,33 @@ class TimelineTest(unittest.TestCase):
         self.assertEqual(web.clip_step("working", "Finding the other times in the stream"), 1)
         self.assertEqual(web.clip_step("working", "Downloading part 2 of 4 in HD"), 1)
         self.assertEqual(web.clip_step("working", "Writing captions from the audio"), 2)
+
+
+
+class FetchTest(unittest.TestCase):
+    def test_a_dropped_download_is_tried_again(self):
+        wd, calls = Path(tempfile.mkdtemp()), []
+
+        def flaky(cmd, timeout):
+            calls.append(cmd)
+            if len(calls) == 1:
+                (wd / "part0.mp4.part").write_bytes(b"half")
+                return subprocess.CompletedProcess(cmd, 1, b"", b"ERROR: ffmpeg exited with code 8")
+            (wd / "part0.mp4").write_bytes(b"video")
+            return subprocess.CompletedProcess(cmd, 0, b"", b"")
+
+        with mock.patch.object(clipper.sources, "_run", flaky), mock.patch.object(clipper.time, "sleep"):
+            self.assertEqual(clipper.fetch_section("abc", 1, 2, wd, name="part0"), wd / "part0.mp4")
+        self.assertEqual(len(calls), 2)
+        self.assertFalse((wd / "part0.mp4.part").exists())   # the half download was cleared away
+
+    def test_it_gives_up_after_three_tries(self):
+        wd = Path(tempfile.mkdtemp())
+        failing = mock.Mock(return_value=subprocess.CompletedProcess([], 1, b"", b"ERROR: code 8"))
+        with mock.patch.object(clipper.sources, "_run", failing), mock.patch.object(clipper.time, "sleep"):
+            with self.assertRaises(clipper.sources.SourceError):
+                clipper.fetch_section("abc", 1, 2, wd)
+        self.assertEqual(failing.call_count, 3)
 
 
 if __name__ == "__main__":
