@@ -6,11 +6,13 @@ This is the working summary of the approved plan from November 17, 2026. The ful
 
 Prove that an automated system can make short clips that go viral, then turn that reach into income. Start with IShowSpeed and Stable Ronaldo stream VODs on YouTube. Expand to more creators and trends, GTA 6 first, once clip quality is proven.
 
+**Quality bar (user, November 18, 2026):** every clip must be genuinely funny or entertaining, with an edit that is clearly better than a basic caption-and-crop. A boring moment with a good edit is a fail. A VOD's age does not matter, so older VODs (which have "most replayed" heatmaps) are fair game. When in doubt, the pipeline makes fewer clips, not weaker ones.
+
 ## Decisions
 
 | Area | Decision |
 | --- | --- |
-| Clip engine | Built in this repo and run on the Raspberry Pi 4: yt-dlp, ffmpeg, whisper.cpp, Piper and a Claude model through the Anthropic API. No paid clipping service; Higgsfield has no API. |
+| Clip engine | Built in this repo and run on the Raspberry Pi 4: yt-dlp, ffmpeg, whisper.cpp, Piper and a Claude model through the Anthropic API. No paid clipping service. Higgsfield's Personal Clipper has no public API, and its pages do not say how it picks moments or which edits it adds, so it stays a manual benchmark: run the same VOD through it by hand and compare. |
 | Clip format | Meme-style edit, 30 to 50 seconds: a short story (setup and payoff, two or three segments) with word-by-word captions throughout, plus colour flashes with sound effects, punch-in zooms, whip transitions and small props (emoji, arrows, circles, effort meter) chosen to fit it. A visible beat every 2 to 4 seconds. Some clips get a one-sentence AI voiceover as a bridge between segments. No fixed template. Full detail in [STYLE.md](STYLE.md). |
 | Style reference | The user's example Shorts: https://youtube.com/shorts/dz0OGGXHBVU and https://youtube.com/shorts/KKwER8qiAP4 (more to come), analysed in [STYLE.md](STYLE.md) |
 | Sources | IShowSpeed VODs from the [@IShowSpeed streams tab](https://www.youtube.com/@IShowSpeed/streams). Stable Ronaldo streams on Twitch; his full streams reach YouTube as uploads on [Stable Ronaldo Live](https://www.youtube.com/channel/UCLldJScHWCtsFlfanYXS8nQ). Links pasted in by hand at first. |
@@ -25,9 +27,9 @@ Prove that an automated system can make short clips that go viral, then turn tha
 ## Pipeline components
 
 1. **Intake:** paste a VOD link in the dashboard. A watcher for new VODs comes in month 1.
-2. **Analyzer:** finds candidate moments without downloading the whole video. Main signals: YouTube auto-captions (always present, with per-word timing and tags such as `[screaming]` and `[laughter]`) and loudness peaks from an audio-only download. Bonus signals when present: the "most replayed" heatmap and live chat replay (see "Source signals" below for why these are often missing).
-3. **Ranker:** a Claude model scores each candidate from 0 to 100, sets start and end, groups candidates that make a setup and payoff, and flags unsafe content.
-4. **Edit planner:** a Claude model with vision looks at frames and the transcript of the chosen segments and writes an edit plan following [STYLE.md](STYLE.md): caption styling and keyword colours, stage-direction captions, flashes, sound effects, zooms, props and transitions, and whether a bridge voiceover fits. Props and sounds come from a library tagged by mood (shock, laughter, disbelief, hype, fail, wholesome).
+2. **Analyzer:** finds candidate moments without downloading the whole video. Main signals: YouTube auto-captions (always present, with per-word timing and tags such as `[screaming]` and `[laughter]`) and loudness peaks from an audio-only download. Bonus signals when present: the "most replayed" heatmap, live chat replay, and which moments other clip channels already turned into popular Shorts (a sign the moment is funny; our edit must still be our own). See "Source signals" below for why the first two are often missing.
+3. **Ranker:** funny first, in two passes. A cheaper Claude model reads every transcript window and keeps only those with a real joke, reaction, fail or story beat. A stronger Claude model then looks at frames plus transcript for the survivors, scores each from 0 to 100 on "would someone send this to a friend", explains the joke in one line, sets start and end, groups setups with payoffs, and flags unsafe content. Anything it cannot explain as funny or entertaining is dropped, even if the signals were loud.
+4. **Edit planner:** a Claude model with vision looks at frames and the transcript of the chosen segments and writes an edit plan following [STYLE.md](STYLE.md): caption styling and keyword colours, stage-direction captions, flashes, sound effects, zooms, props, transitions, up to two brief meme cutaways (0.5 to 2 seconds, then back to the clip), and whether a bridge voiceover fits. Props and sounds come from a library tagged by mood (shock, laughter, disbelief, hype, fail, wholesome).
 5. **Renderer:** downloads only the chosen segments, crops to fill 1080×1920 on the people (face-tracked; no blurred bars), and applies the edit plan with ffmpeg. A facecam-plus-gameplay layout comes later for gaming streams.
 6. **Review:** the user watches each clip in the dashboard, rates it and leaves a note.
 7. Month 1 and later: scheduler, publishers (YouTube Data API, Instagram Graph API, Facebook Pages API), stats collector, Telegram alerts.
@@ -55,8 +57,8 @@ Data: one SQLite database plus files on the Pi under `/data` (sources, work, cli
 Needed now:
 - A local Claude Code session on the MacBook with key-based SSH to the Pi at 100.95.15.84 (Tailscale), user `tallergiraffe`. Done and working.
 - The user's existing Anthropic API key, with a $5 monthly spend limit, stored as `ANTHROPIC_API_KEY=...` in `/home/tallergiraffe/.clippzz.env` on the Pi
-- Docker Engine and the Compose plugin on the Pi (not installed yet)
-- Pending OS updates applied on the Pi (444 waiting on November 17)
+- Docker Engine and the Compose plugin on the Pi, plus the pending OS updates (444 on November 17): run `bash ~/clippzz/scripts/pi-setup.sh` on the Pi, which needs the user's sudo password
+- If Tailscale on the Mac stops passing traffic ("MagicSock function not running"), quit and reopen the Tailscale app; reboot the Mac if that does not fix it. SSH over the home network (`ssh tallergiraffe@TallerGiraffe.local`) works as a fallback.
 - A USB SSD (256 GB or more) on a blue USB 3 port, mounted at `/data`. Moved up from "later": the SD card has 15 GB free and constant video writes wear SD cards out.
 
 Added only when its step is reached: ordinary YouTube, Instagram and Facebook accounts (for posting by hand, after the first good clip), Google Cloud project with the YouTube Data API, Instagram professional account plus Facebook Page plus Meta developer app, Telegram bot (optional), Twitch developer app, Whop account, AdSense, TikTok developer app.

@@ -88,13 +88,20 @@ So the "2 to 5 edit beats per clip" in the original plan is too few. The example
 4. Caption every spoken word, word by word, in the style above, with one or two coloured keywords a line.
 5. Add stage-direction captions in asterisks when the action matters more than the words.
 6. Land a beat every 2 to 4 seconds: colour flash plus sound effect, punch-in zoom, whip transition, or a prop.
-7. Props come from a small library: effort meter, circle, arrow, and emoji (skull, heart, fire, crying-laughing, cold face). Pick by mood.
+7. Props come from a small library: effort meter, circle, arrow, and emoji (skull, heart, fire, crying-laughing, cold face). Pick by mood. A brief meme cutaway is allowed too (see below).
 8. Voiceover only as a one-sentence bridge between two moments.
 9. Loud master (around −8 LUFS integrated), dialogue always clear, royalty-free music bed at low level.
 10. Handle watermark lower middle. No intro or outro cards.
 11. Title: a short claim plus one emoji plus `#ishowspeed` (or the creator's tag), and credit the creator in the caption.
 
+## Meme cutaways (user decision, November 18, 2026)
+
+Neither example uses one, but the user wants them: a brief cut away to a meme clip or image (a reaction, a famous sound bite, a movie moment) that comments on what just happened, then a cut straight back so the original clip carries on. Rules:
+
+- 0.5 to 2 seconds each, at most two per clip, only where the joke gets funnier for it.
+- The original audio pauses or ducks under the meme's own sound, then picks up where it left off.
+- Only from the tagged library, and no commercial music in it (see PLAN.md rules).
+
 ## Open questions
 
-- Neither example uses outside meme clips (for example a cut to a reaction GIF). Ask the user whether they want those too, or whether props and flashes are the "memes" they mean.
 - Both examples come from IRL streams shot on a handheld camera. Gaming streams with a facecam and gameplay (common for Stable Ronaldo) will need their own layout; the examples do not show one yet.
