@@ -33,13 +33,30 @@ templates.env.filters["fromjson"] = lambda t: db.loads(t, []) or []
 templates.env.filters["fromjsonobj"] = lambda t: db.loads(t, {}) or {}
 
 
-# Creators named by a hashtag in a title, with their own channels (checked to exist).
+# Creators named by a hashtag in a title, with their YouTube channels (checked to
+# exist) and their Instagram handles where known for sure.
 CREATORS = {
     "ishowspeed": ("IShowSpeed", "https://www.youtube.com/@IShowSpeed"),
     "kaicenat": ("Kai Cenat", "https://www.youtube.com/@KaiCenat"),
     "fanum": ("Fanum", "https://www.youtube.com/@Fanum"),
     "stableronaldo": ("Stable Ronaldo", "https://www.youtube.com/@StableRonaldo"),
 }
+INSTAGRAM = {"ishowspeed": "@ishowspeed", "kaicenat": "@kaicenat"}
+# Names to keep capitalised when a capitals-only title is turned into a sentence.
+NAMES = ["IShowSpeed", "Speed", "Kai Cenat", "Kai", "Fanum", "Stable Ronaldo", "Ronaldo", "Duke Dennis",
+         "Serena Williams", "Serena", "Minecraft", "GTA"]
+
+
+def sentence_case(title: str) -> str:
+    """'SPEED STEALS KAI'S PLATE!!! 😭 #ishowspeed' -> "Speed steals Kai's plate! 😭"."""
+    text = re.sub(r"\s*#\w+", "", title).strip()
+    text = re.sub(r"!{2,}", "!", text)
+    if sum(ch.isupper() for ch in text) > 0.6 * max(1, sum(ch.isalpha() for ch in text)):
+        text = text.lower()
+        for name in NAMES:
+            text = re.sub(rf"\b{re.escape(name.lower())}\b", name, text)
+        text = text[:1].upper() + text[1:]
+    return text
 
 
 def _handle(url: str | None) -> str | None:
@@ -73,8 +90,27 @@ def post_parts(clip, vod, moment_start=None) -> dict:
         lines.append(f"Music: {music}")
     lines += ["", " ".join(tags + ["#shorts"])]
     description = "\n".join(lines)
-    return {"title": title, "description": description,
-            "caption": title + "\n\n" + description.replace(" #shorts", "")}
+    return {"title": title, "description": description, "caption": instagram_caption(clip, plan, tags, credits)}
+
+
+def instagram_caption(clip, plan: dict, tags: list[str], credits: list[str]) -> str:
+    """Instagram's own format: a short casual hook (only ~125 characters show
+    before "more"), 🎥 credits by Instagram handle, 🎵 music, a follow line,
+    and at most five hashtags (Instagram's cap since December 2025)."""
+    hook = (plan.get("ig_hook") or "").strip() or sentence_case(clip["title"] or "")
+    handles = []
+    for tag in tags:
+        handle = INSTAGRAM.get(tag.lstrip("#").lower())
+        if handle and handle not in handles:
+            handles.append(handle)
+    if not handles:  # creators without a known Instagram handle: credit by name
+        handles = [c.lstrip("@") for c in credits if c]
+    lines = [hook, "", "\U0001F3A5 " + " ".join(handles)]
+    if clip["music_credit"]:
+        music = re.sub(r"\s*\(?https?://\S+\)?", "", clip["music_credit"]).strip().rstrip(",.")
+        lines.append("\U0001F3B5 " + music)
+    lines += ["", f"Follow @{config.CHANNEL_HANDLE} for a new clip every day", "", " ".join(tags[:5])]
+    return "\n".join(lines)
 
 
 def post_text(clip, vod, moment_start=None) -> str:

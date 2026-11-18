@@ -96,8 +96,15 @@ class PostTextTest(unittest.TestCase):
                             "Music: \"Monkeys Spinning Monkeys\" by Kevin MacLeod (CC BY 4.0)\n\n"
                             "#ishowspeed #kaicenat #funny #streamer #shorts")
         self.assertNotIn("http", d)
-        self.assertTrue(post["caption"].startswith(clip["title"]))
-        self.assertNotIn("#shorts", post["caption"])
+        cap = post["caption"]
+        self.assertTrue(cap.startswith("Speed steals Kai Cenat's whole plate! \U0001F62D"))  # no ig_hook: title as a sentence
+        self.assertIn("\U0001F3A5 @ishowspeed @kaicenat", cap)
+        self.assertIn("\U0001F3B5 \"Monkeys Spinning Monkeys\" by Kevin MacLeod (CC BY 4.0)", cap)
+        self.assertIn("Follow @chatcl1pthat for a new clip every day", cap)
+        self.assertTrue(cap.endswith("#ishowspeed #kaicenat #funny #streamer"))
+        self.assertNotIn("#shorts", cap)
+        hooked = post_parts({**clip, "plan": '{"ig_hook": "Speed took the WHOLE plate \U0001F62D"}'}, vod)
+        self.assertTrue(hooked["caption"].startswith("Speed took the WHOLE plate"))
 
     def test_unknown_creator_uses_their_handle_or_name(self):
         from clippzz.web import post_parts

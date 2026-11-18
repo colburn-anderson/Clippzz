@@ -36,6 +36,9 @@ WHISPER_MODEL = os.environ.get("CLIPPZZ_WHISPER_MODEL", "small.en")
 WHISPER_THREADS = int(os.environ.get("CLIPPZZ_WHISPER_THREADS", "3"))
 # Extra footage fetched around a judged moment. Lots after it, because the
 # owner wants to see how a bit ends, which often happens a minute later.
+# The clip accounts (brand guide: Chat Clip That). Used in the Instagram caption.
+CHANNEL_HANDLE = os.environ.get("CLIPPZZ_CHANNEL_HANDLE", "chatcl1pthat")
+
 CLIP_PAD_BEFORE_S = 10
 CLIP_PAD_AFTER_S = 75
 

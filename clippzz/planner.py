@@ -105,7 +105,11 @@ react to.
 
 14. Title in the channels' pattern: the claim in capitals, three exclamation \
 marks, one or two emoji, then the creators' hashtags. For example "MARLON \
-GOES BALD!!! 😂🤯 #marlon". No invented quotes or events.
+GOES BALD!!! 😂🤯 #marlon". No invented quotes or events. Also write ig_hook, \
+the first line of the Instagram caption: casual sentence case, under 90 \
+characters, the creators' names in it, one word in capitals for emphasis at \
+most, one or two emoji, no hashtags (for example "Speed ran to Kai's room for \
+ONE bite and took the whole plate 😭🍽️").
 
 Times: every time is in seconds from the start of the section, to two \
 decimals. Put beat edges in the gaps between words, using the transcript \
@@ -155,6 +159,7 @@ def schema(sound_names: list[str], music_names: list[str]) -> dict:
         "fit": {"type": "string", "enum": ["strong", "ok", "weak"]},
         "fit_reason": text,
         "title": text,
+        "ig_hook": text,
         "beats": {"type": "array", "items": _obj({
             "start_s": num, "end_s": num,
             "shows": {"type": "string", "description": "What this beat shows, in a few words."},
