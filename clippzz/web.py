@@ -98,26 +98,127 @@ def healthz():
     return {"ok": True}
 
 
+# The steps a clip goes through, as the clip maker reports them.
+CLIP_STEPS = [("Download", "Downloading"), ("Captions", "Writing captions"), ("Frames", "Looking at"),
+              ("Plan", "Planning"), ("Render", "Rendering")]
+
+
+def clip_step(state: str, detail: str | None) -> int:
+    """0 while waiting, 1 to 5 for the step under way, 6 when done."""
+    if state == "done":
+        return len(CLIP_STEPS) + 1
+    for i, (_, prefix) in enumerate(CLIP_STEPS, 1):
+        if (detail or "").startswith(prefix):
+            return i
+    return 0
+
+
+templates.env.globals["CLIP_STEPS"] = CLIP_STEPS
+templates.env.globals["clip_step"] = clip_step
+
+CLIP_JOIN = ("SELECT c.*, m.start_s AS m_start, m.end_s AS m_end, m.title AS m_title, m.vod_id AS vod_id"
+             " FROM clips c JOIN moments m ON m.id=c.moment_id")
+
+
+def _home_data(conn) -> dict:
+    vods = conn.execute(
+        "SELECT v.*, "
+        " (SELECT COUNT(*) FROM moments m WHERE m.vod_id=v.id AND m.judged=1 AND m.verdict!='skip') AS n_good,"
+        " (SELECT COUNT(*) FROM moments m WHERE m.vod_id=v.id) AS n_found,"
+        " (SELECT COALESCE(SUM(cost_usd),0) FROM usage u WHERE u.vod_id=v.id) AS cost"
+        " FROM vods v ORDER BY v.created_at DESC").fetchall()
+    # Top contenders: judged worth a look, not skipped, no clip made or being made yet.
+    review = conn.execute(
+        "SELECT m.*, v.title AS vod_title, v.channel AS vod_channel FROM moments m JOIN vods v ON v.id=m.vod_id"
+        " WHERE m.judged=1 AND m.verdict IN ('post','maybe') AND (m.rating IS NULL OR m.rating='good')"
+        " AND NOT EXISTS (SELECT 1 FROM clips c WHERE c.moment_id=m.id)"
+        " ORDER BY (m.flags IS NOT NULL AND m.flags NOT IN ('[]','')) ,"
+        " (m.rating='good') DESC, m.judge_score DESC LIMIT 20").fetchall()
+    working = conn.execute(CLIP_JOIN + " WHERE c.state IN ('queued','working')"
+                           " ORDER BY c.state='working' DESC, c.created_at").fetchall()
+    failed = conn.execute(CLIP_JOIN + " WHERE c.state='failed' ORDER BY c.updated_at DESC LIMIT 5").fetchall()
+    ready = conn.execute(CLIP_JOIN + " WHERE c.state='done' AND c.posted_at IS NULL"
+                         " AND (c.rating IS NULL OR c.rating!='bad') ORDER BY c.updated_at DESC LIMIT 12").fetchall()
+    posted = conn.execute(CLIP_JOIN + " WHERE c.state='done' AND c.posted_at IS NOT NULL"
+                          " ORDER BY c.posted_at DESC LIMIT 20").fetchall()
+    rated = conn.execute(
+        "SELECT rating FROM clips WHERE rating IS NOT NULL ORDER BY rated_at DESC LIMIT 10").fetchall()
+    return {
+        "vods": vods, "vods_by_id": {v["id"]: v for v in vods}, "review": review, "working": working,
+        "failed": failed, "ready": ready, "posted": posted,
+        "scanning": [v for v in vods if v["state"] in db.ACTIVE_STATES],
+        "spent": db.month_spend(conn),
+        "budget": float(db.get_setting(conn, "monthly_budget_usd", config.MONTHLY_BUDGET_USD)),
+        "last10_good": sum(1 for r in rated if r["rating"] == "good"), "last10": len(rated),
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request, error: str = ""):
     with db.session() as conn:
-        vods = conn.execute(
-            "SELECT v.*, "
-            " (SELECT COUNT(*) FROM moments m WHERE m.vod_id=v.id AND m.verdict='post') AS n_post,"
-            " (SELECT COUNT(*) FROM moments m WHERE m.vod_id=v.id) AS n_found,"
-            " (SELECT COALESCE(SUM(cost_usd),0) FROM usage u WHERE u.vod_id=v.id) AS cost"
-            " FROM vods v ORDER BY v.created_at DESC").fetchall()
-        spent = db.month_spend(conn)
-        budget = float(db.get_setting(conn, "monthly_budget_usd", config.MONTHLY_BUDGET_USD))
-        # The week 1 gate counts finished clips, not moments.
-        rated = conn.execute(
-            "SELECT rating FROM clips WHERE rating IS NOT NULL ORDER BY rated_at DESC LIMIT 10").fetchall()
+        data = _home_data(conn)
     return templates.TemplateResponse(request, "home.html", {
-        "vods": vods, "spent": spent, "budget": budget,
-        "labels": STATE_LABELS, "error": error,
-        "last10_good": sum(1 for r in rated if r["rating"] == "good"), "last10": len(rated),
-        "busy": any(v["state"] in db.ACTIVE_STATES for v in vods),
+        **data, "labels": STATE_LABELS, "clip_labels": CLIP_LABELS, "error": error, "busy": False,
+        "live": bool(data["working"] or data["scanning"]),
     })
+
+
+@app.get("/status.json")
+def status():
+    """What is under way, for the live progress on the home page."""
+    with db.session() as conn:
+        vods = conn.execute("SELECT id, state, detail FROM vods WHERE state IN (%s)"
+                            % ",".join("?" * len(db.ACTIVE_STATES)), db.ACTIVE_STATES).fetchall()
+        clips = conn.execute("SELECT id, state, detail, created_at, updated_at FROM clips"
+                             " WHERE state IN ('queued','working')"
+                             " OR updated_at > ?", (time.time() - 120,)).fetchall()
+    return JSONResponse({
+        "vods": [{"id": v["id"], "state": v["state"], "detail": v["detail"]} for v in vods],
+        "clips": [{"id": c["id"], "state": c["state"], "detail": c["detail"],
+                   "step": clip_step(c["state"], c["detail"]), "since": c["updated_at"]} for c in clips],
+        "now": time.time(),
+    })
+
+
+@app.post("/moments/{mid}/approve")
+def approve(mid: int, note: str = Form("")):
+    """The owner watched the moment and wants it made: mark it funny and queue the edit."""
+    with db.session() as conn:
+        row = conn.execute("SELECT id, note FROM moments WHERE id=?", (mid,)).fetchone()
+        if not row:
+            raise HTTPException(404, "No such moment")
+        conn.execute("UPDATE moments SET rating='good', note=?, rated_at=? WHERE id=?",
+                     (note.strip()[:4000] or row["note"], time.time(), mid))
+        busy = conn.execute("SELECT 1 FROM clips WHERE moment_id=? AND state IN ('queued','working')",
+                            (mid,)).fetchone()
+        if not busy:
+            db.add_clip(conn, mid)
+    return RedirectResponse("/#progress", status_code=303)
+
+
+@app.post("/moments/{mid}/skip")
+def skip(mid: int):
+    with db.session() as conn:
+        conn.execute("UPDATE moments SET rating='bad', rated_at=? WHERE id=?", (time.time(), mid))
+    return RedirectResponse("/#review", status_code=303)
+
+
+@app.post("/clips/{cid}/retry")
+def retry_clip(cid: int):
+    with db.session() as conn:
+        row = conn.execute("SELECT plan FROM clips WHERE id=? AND state='failed'", (cid,)).fetchone()
+        if row and row["plan"]:
+            db.queue_rerender(conn, cid)       # the plan was paid for: render it again for free
+        elif row:
+            db.set_clip(conn, cid, "queued", "Waiting to retry", attempts=0)
+    return RedirectResponse("/#progress", status_code=303)
+
+
+@app.post("/clips/{cid}/posted")
+def mark_posted(cid: int, undo: str = Form("")):
+    with db.session() as conn:
+        conn.execute("UPDATE clips SET posted_at=? WHERE id=?", (None if undo else time.time(), cid))
+    return RedirectResponse("/#ready", status_code=303)
 
 
 @app.post("/vods")

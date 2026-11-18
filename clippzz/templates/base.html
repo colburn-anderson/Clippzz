@@ -41,6 +41,23 @@ video.vertical { width:min(100%, 300px); aspect-ratio:9/16; background:#000; bor
 textarea { resize:vertical; min-height:2.6em; line-height:1.4; }
 textarea.posttext { flex:1 1 auto; width:100%; font-size:.9rem; }
 .copybox { display:flex; gap:8px; align-items:flex-start; margin:4px 0 10px; }
+.between { justify-content:space-between; } .row.top { align-items:flex-start; } .grow { flex:1 1 300px; min-width:0; }
+nav.tabs { position:sticky; top:0; z-index:5; display:flex; gap:6px; flex-wrap:wrap; padding:10px 0; background:var(--bg); border-bottom:1px solid var(--line); margin-bottom:6px; }
+nav.tabs a { text-decoration:none; color:var(--ink); padding:6px 12px; border:1px solid var(--line); border-radius:999px; background:var(--card); font-weight:600; font-size:.9rem; }
+nav.tabs .count { display:inline-block; min-width:1.5em; padding:0 6px; border-radius:999px; background:var(--chip); text-align:center; font-variant-numeric:tabular-nums; }
+section { scroll-margin-top:64px; }
+.contender .title { font-size:1.1rem; display:block; margin-top:4px; }
+.contender .joke { margin:8px 0; }
+.contender form textarea { flex:1 1 240px; }
+.steps { display:flex; gap:4px; flex-wrap:wrap; margin:10px 0 4px; }
+.step { padding:3px 10px; border-radius:999px; background:var(--chip); color:var(--dim); font-size:.8rem; font-weight:600; }
+.step.done { background:var(--good); color:#fff; }
+.step.now { background:var(--accent); color:#fff; animation:pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity:.6; } }
+@media (prefers-reduced-motion: reduce) { .step.now { animation:none; } }
+.banner { position:sticky; top:52px; z-index:6; padding:10px 14px; border-radius:10px; background:var(--accent); color:#fff; font-weight:600; margin:8px 0; }
+.banner button { margin-left:8px; padding:4px 10px; }
+.chip.working { color:var(--accent); }
 </style>
 </head>
 <body>
@@ -48,5 +65,55 @@ textarea.posttext { flex:1 1 auto; width:100%; font-size:.9rem; }
 <div class="top"><a class="brand" href="/">Clippzz</a>{% block topright %}{% endblock %}</div>
 {% block body %}{% endblock %}
 </main>
+<script>
+// Copy buttons. The dashboard is plain http, where the modern clipboard API is
+// off, so this selects the text and uses the older copy command.
+document.querySelectorAll("button.copy").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    const box = btn.closest(".copybox").querySelector("textarea.posttext");
+    box.focus(); box.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) {}
+    btn.textContent = ok ? "Copied" : "Selected: press Cmd+C";
+    setTimeout(function () { btn.textContent = "Copy"; }, 2500);
+  });
+});
+
+// "Watch the moment" loads its player only when opened, so a page of
+// contenders does not load twenty YouTube players at once.
+document.querySelectorAll("details.watch").forEach(function (d) {
+  d.addEventListener("toggle", function () {
+    const holder = d.querySelector(".player");
+    if (d.open && !holder.firstChild) {
+      holder.innerHTML = '<iframe allow="autoplay; fullscreen" allowfullscreen src="' + d.dataset.src + '"></iframe>';
+    } else if (!d.open) {
+      holder.innerHTML = "";
+    }
+  });
+});
+
+// Keep a draft of every note in this browser while it is typed, so a note is
+// never lost if the Pi is restarting when it is sent. Cleared once saved.
+(function () {
+  let store = null;
+  try { store = window.localStorage; } catch (e) { return; }
+  document.querySelectorAll("form textarea[name=note]").forEach(function (box) {
+    const key = "clippzz-draft:" + box.form.getAttribute("action");
+    let draft = null;
+    try { draft = store.getItem(key); } catch (e) {}
+    if (draft !== null) {
+      if (box.value.trim() === draft.trim()) {
+        try { store.removeItem(key); } catch (e) {}
+      } else if (!box.value.trim()) {
+        box.value = draft;
+        box.insertAdjacentHTML("afterend", '<span class="small dim">Restored your unsent note.</span>');
+      }
+    }
+    box.addEventListener("input", function () {
+      try { store.setItem(key, box.value); } catch (e) {}
+    });
+  });
+})();
+</script>
 </body>
 </html>

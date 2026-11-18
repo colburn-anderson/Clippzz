@@ -1,35 +1,180 @@
 {% extends "base.html" %}
+{% import "_clip.html" as ui with context %}
 {% block topright %}<span class="small dim">${{ "%.2f"|format(spent) }} of ${{ "%.0f"|format(budget) }} used this month</span>{% endblock %}
 {% block body %}
-<div class="card">
-  <form class="row" method="post" action="/vods">
-    <input type="url" name="url" placeholder="Paste a YouTube VOD link" required>
-    <button class="primary" type="submit">Find funny moments</button>
-  </form>
-  {% if error %}<p class="error small">{{ error }}</p>{% endif %}
-  <p class="small dim" style="margin:8px 0 0">A 3-hour VOD takes roughly 10 to 20 minutes. Rate every moment so the picks can be tuned.</p>
-</div>
+<nav class="tabs">
+  <a href="#review">Review <span class="count">{{ review|length }}</span></a>
+  <a href="#progress">In progress <span class="count">{{ working|length + scanning|length }}</span></a>
+  <a href="#ready">Ready to post <span class="count">{{ ready|length }}</span></a>
+  <a href="#posted">Posted <span class="count">{{ posted|length }}</span></a>
+  <a href="#videos">Videos <span class="count">{{ vods|length }}</span></a>
+</nav>
+<div id="banner" class="banner" hidden>Something finished. <button type="button" onclick="location.reload()">Refresh</button></div>
 
-{% if last10 %}
-<p class="small dim">Your last {{ last10 }} clip ratings: <strong>{{ last10_good }} good enough to post</strong>. The week 1 gate is 7 of 10 in a row.</p>
+<section id="review">
+  <h2>Review: top contenders</h2>
+  <p class="small dim">Watch each moment. <strong>Approve &amp; edit</strong> starts the clip straight away (about 10 minutes, roughly 40 cents); <strong>Skip</strong> hides it. Nothing is edited until you approve.</p>
+  {% for m in review %}
+  <div class="card contender" id="m{{ m.id }}">
+    <div class="row between top">
+      <div class="grow">
+        <div>
+          {% if m.rating == "good" %}<span class="chip done">You marked it funny</span>{% endif %}
+          {% for f in m.flags|fromjson %}<span class="chip failed">Check: {{ f.replace("_", " ") }}</span>{% endfor %}
+        </div>
+        <strong class="title">{{ m.title }}</strong>
+        <div class="small dim">{{ m.vod_channel or "" }} · {{ m.vod_title or m.vod_id }} · {{ m.start_s|clock }} to {{ m.end_s|clock }}</div>
+      </div>
+      <div class="score" title="How funny the reviewer thinks it is, out of 100">{{ m.judge_score }}</div>
+    </div>
+    <p class="joke">{{ m.joke }}</p>
+    <details class="watch" data-src="https://www.youtube-nocookie.com/embed/{{ m.vod_id }}?start={{ m.start_s|int }}&end={{ (m.end_s + 1)|int }}&rel=0&autoplay=1">
+      <summary>Watch the moment</summary><div class="player"></div>
+    </details>
+    <form class="row" method="post" action="/moments/{{ m.id }}/approve">
+      <textarea name="note" rows="1" placeholder="Anything the edit should do? (optional)">{{ m.note or '' }}</textarea>
+      <button class="primary" type="submit">Approve &amp; edit</button>
+      <button type="submit" formaction="/moments/{{ m.id }}/skip">Skip</button>
+    </form>
+  </div>
+  {% else %}
+  <p class="dim">Nothing waiting for review. Add a video below and the best moments will show up here.</p>
+  {% endfor %}
+</section>
+
+<section id="progress">
+  <h2>In progress</h2>
+  {% for v in scanning %}
+  <a class="card vodlink" href="/vod/{{ v.id }}" data-vod="{{ v.id }}">
+    <div class="row between"><strong>{{ v.title or v.id }}</strong><span class="chip {{ v.state }}">Finding moments</span></div>
+    <div class="small dim status">{{ v.detail or "Waiting" }}</div>
+  </a>
+  {% endfor %}
+  {% for c in working %}
+  {% set vod = vods_by_id.get(c.vod_id) %}
+  <div class="card" id="c{{ c.id }}" data-state="{{ c.state }}">
+    <div class="row between">
+      <strong>{{ c.title or c.m_title }}</strong>
+      <span class="chip {{ c.state }}">{{ "Editing" if c.state == "working" else ("Waiting, number " ~ loop.index ~ " in line") }}</span>
+    </div>
+    <div class="small dim">{{ vod.title if vod else "" }} · started {{ c.created_at|ago }}</div>
+    {{ ui.progress(c) }}
+  </div>
+  {% endfor %}
+  {% for c in failed %}
+  <div class="card" id="c{{ c.id }}" data-state="failed">
+    <div class="row between"><strong>{{ c.title or c.m_title }}</strong><span class="chip failed">Failed</span></div>
+    <div class="small">{{ (c.detail or "")[:300] }}</div>
+    <form method="post" action="/clips/{{ c.id }}/retry" style="margin-top:8px">
+      <button type="submit">Try again</button>
+      <span class="small dim">{{ "Re-renders the saved plan, free." if c.plan else "Starts the edit again." }}</span>
+    </form>
+  </div>
+  {% endfor %}
+  {% if not (scanning or working or failed) %}
+  <p class="dim">Nothing running. Approve a moment above to start an edit.</p>
+  {% endif %}
+</section>
+
+<section id="ready">
+  <h2>Ready to post</h2>
+  {% if last10 %}<p class="small dim">Your last {{ last10 }} clip ratings: <strong>{{ last10_good }} good enough to post</strong>. The week 1 goal is 7 of 10 in a row.</p>{% endif %}
+  {% for c in ready %}
+  <div class="card">{{ ui.clip_card(c, vods_by_id.get(c.vod_id), c.m_start) }}</div>
+  {% else %}
+  <p class="dim">No finished clips waiting. They appear here as soon as an edit is done.</p>
+  {% endfor %}
+</section>
+
+<section id="posted">
+  <h2>Posted</h2>
+  {% if posted %}
+  <details>
+    <summary>{{ posted|length }} posted clip{{ "s" if posted|length != 1 }}</summary>
+    {% for c in posted %}
+    <div class="card">{{ ui.clip_card(c, vods_by_id.get(c.vod_id), c.m_start) }}</div>
+    {% endfor %}
+  </details>
+  {% else %}
+  <p class="dim">After you post a clip, press <strong>I posted it</strong> on it and it moves here.</p>
+  {% endif %}
+</section>
+
+<section id="videos">
+  <h2>Videos</h2>
+  <div class="card">
+    <form class="row" method="post" action="/vods">
+      <input type="url" name="url" placeholder="Paste a YouTube link: a highlight video or a stream" required>
+      <button class="primary" type="submit">Find funny moments</button>
+    </form>
+    {% if error %}<p class="error small">{{ error }}</p>{% endif %}
+    <p class="small dim" style="margin:8px 0 0">A 30-minute highlight video takes about 8 minutes and 35 cents; a long stream up to 20 minutes.</p>
+  </div>
+  {% for v in vods %}
+  <a class="card vodlink" href="/vod/{{ v.id }}">
+    <div class="row between">
+      <strong>{{ v.title or v.id }}</strong>
+      <span class="chip {{ v.state }}">{{ labels.get(v.state, v.state) }}</span>
+    </div>
+    <div class="small dim">
+      {{ v.channel or "" }}{% if v.duration_s %} · {{ v.duration_s|clock }}{% endif %} · added {{ v.created_at|ago }}
+      {% if v.state == "done" %} · {{ v.n_good }} worth a look of {{ v.n_found }} found{% endif %}
+      {% if v.cost %} · ${{ "%.2f"|format(v.cost) }}{% endif %}
+    </div>
+    {% if v.state != "done" and v.detail %}<div class="small">{{ v.detail }}</div>{% endif %}
+  </a>
+  {% else %}
+  <p class="dim">Nothing yet. Paste a link above to start.</p>
+  {% endfor %}
+</section>
+
+{% if live %}
+<script>
+// Live progress: update the steps in place every few seconds. When something
+// finishes, refresh the page, unless a video is playing or a note is being typed.
+(function () {
+  const shownClips = new Set([...document.querySelectorAll("#progress [data-state]")].map(e => e.id));
+  const shownVods = new Set([...document.querySelectorAll("#progress [data-vod]")].map(e => e.dataset.vod));
+  function busy() {
+    if ([...document.querySelectorAll("video")].some(v => !v.paused)) return true;
+    if (document.querySelector("details.watch[open]")) return true;
+    const f = document.activeElement;
+    return f && f.tagName === "TEXTAREA" && f.value.trim() !== "";
+  }
+  function changed() {
+    if (busy()) { document.getElementById("banner").hidden = false; setTimeout(tick, 5000); return; }
+    location.reload();
+  }
+  async function tick() {
+    try {
+      const s = await (await fetch("/status.json", {cache: "no-store"})).json();
+      const liveClips = new Set(), liveVods = new Set(s.vods.map(v => v.id));
+      for (const c of s.clips) {
+        const el = document.getElementById("c" + c.id);
+        const active = c.state === "queued" || c.state === "working";
+        if (active) liveClips.add("c" + c.id);
+        if (!el) { if (active) return changed(); continue; }
+        if (el.dataset.state === "queued" && c.state === "working") {
+          el.dataset.state = "working";
+          const chip = el.querySelector(".chip"); if (chip) { chip.textContent = "Editing"; chip.className = "chip working"; }
+        } else if (el.dataset.state !== c.state) return changed();
+        el.querySelectorAll(".step").forEach((st, i) => {
+          st.className = "step " + (i + 1 < c.step ? "done" : (i + 1 === c.step ? "now" : ""));
+        });
+        const status = el.querySelector(".status");
+        if (status && c.detail) status.textContent = c.detail;
+      }
+      for (const v of s.vods) {
+        const el = document.querySelector('[data-vod="' + v.id + '"] .status');
+        if (el) el.textContent = v.detail || "";
+      }
+      for (const id of shownClips) if (!liveClips.has(id) && document.getElementById(id).dataset.state !== "failed") return changed();
+      for (const id of shownVods) if (!liveVods.has(id)) return changed();
+    } catch (e) {}
+    setTimeout(tick, 5000);
+  }
+  setTimeout(tick, 5000);
+})();
+</script>
 {% endif %}
-
-<h2>VODs</h2>
-{% for v in vods %}
-<a class="card vodlink" href="/vod/{{ v.id }}">
-  <div class="row" style="justify-content:space-between">
-    <strong>{{ v.title or v.id }}</strong>
-    <span class="chip {{ v.state }}">{{ labels.get(v.state, v.state) }}</span>
-  </div>
-  <div class="small dim">
-    {{ v.channel or "" }}{% if v.duration_s %} · {{ v.duration_s|clock }}{% endif %}
-    · added {{ v.created_at|ago }}
-    {% if v.state == "done" %} · {{ v.n_post }} worth posting of {{ v.n_found }} found{% endif %}
-    {% if v.cost %} · ${{ "%.2f"|format(v.cost) }}{% endif %}
-  </div>
-  {% if v.state != "done" and v.detail %}<div class="small">{{ v.detail }}</div>{% endif %}
-</a>
-{% else %}
-<p class="dim">Nothing yet. Paste a VOD link above to start.</p>
-{% endfor %}
 {% endblock %}

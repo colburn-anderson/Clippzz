@@ -1,6 +1,7 @@
 {% extends "base.html" %}
+{% import "_clip.html" as ui with context %}
 {% block title %}{{ vod.title or vod.id }} · Clippzz{% endblock %}
-{% block topright %}<a class="small" href="/">All VODs</a>{% endblock %}
+{% block topright %}<a class="small" href="/">Back to the dashboard</a>{% endblock %}
 {% block body %}
 <h1>{{ vod.title or vod.id }}</h1>
 <p class="small dim">
@@ -59,46 +60,14 @@
   </form>
   {% set mclips = clips.get(m.id, []) %}
   {% for c in mclips %}
+  {% if c.state == "done" %}
+  {{ ui.clip_card(c, vod, m.start_s) }}
+  {% else %}
   <div class="clip" id="c{{ c.id }}" data-state="{{ c.state }}">
-    {% if c.state == "done" %}
-    <video class="vertical" controls playsinline preload="metadata" src="/clips/{{ c.id }}.mp4#t=0.5"></video>
-    <div class="clipinfo">
-      <strong>{{ c.title }}</strong>
-      <div class="small dim">Clip {{ c.id }} · {{ c.detail }}{% if c.cost_usd %} · ${{ "%.2f"|format(c.cost_usd) }}{% endif %}
-        · <a href="/clips/{{ c.id }}.mp4" download>Download</a></div>
-      {% set plan = c.plan|fromjsonobj %}
-      {% if plan %}
-      <details>
-        <summary>The edit plan</summary>
-        <p class="small"><strong>Premise:</strong> {{ plan.premise }}<br>
-          <strong>Fit for the format:</strong> {{ plan.fit }}. {{ plan.fit_reason }}</p>
-        <ol class="tight small">{% for b in plan.beats %}<li>{{ "%.1f"|format(b.start_s) }} to {{ "%.1f"|format(b.end_s) }} s: {{ b.shows }}{% if b.zoom > 1.05 %} (punch-in){% endif %}</li>{% endfor %}</ol>
-        {% if plan._settings %}<p class="small dim">Planned by {{ plan._settings.model }} at {{ plan._settings.effort }} effort from {{ plan._settings.frames }} frames for ${{ "%.2f"|format(plan._settings.cost_usd) }}.</p>{% endif %}
-        <p class="small"><strong>Stage directions:</strong> {% for d in plan.stage_directions %}*{{ d.text.strip("*") }}*{{ ", " if not loop.last }}{% endfor %}</p>
-      </details>
-      {% endif %}
-      {% set post = post_parts(c, vod, m.start_s) %}
-      <details>
-        <summary>Post text: title, description, caption</summary>
-        <div class="small dim" style="margin-top:6px">YouTube title</div>
-        <div class="copybox"><textarea class="posttext" rows="2" readonly>{{ post.title }}</textarea><button type="button" class="copy">Copy</button></div>
-        <div class="small dim">YouTube description</div>
-        <div class="copybox"><textarea class="posttext" rows="8" readonly>{{ post.description }}</textarea><button type="button" class="copy">Copy</button></div>
-        <div class="small dim">Instagram and Facebook caption</div>
-        <div class="copybox"><textarea class="posttext" rows="8" readonly>{{ post.caption }}</textarea><button type="button" class="copy">Copy</button></div>
-        <p class="small dim">YouTube: audience "No, it's not made for kids", altered content "No", category Entertainment, visibility Public.</p>
-      </details>
-      <form class="row" method="post" action="/clips/{{ c.id }}/rate">
-        <button class="good {{ 'on' if c.rating == 'good' }}" name="rating" value="good" type="submit">Post it</button>
-        <button class="bad {{ 'on' if c.rating == 'bad' }}" name="rating" value="bad" type="submit">Not good enough</button>
-        <textarea name="note" rows="4" placeholder="What to change (optional)">{{ c.note or '' }}</textarea>
-      </form>
-    </div>
-    {% else %}
     <div><span class="chip {{ c.state }}">{{ clip_labels.get(c.state, c.state) }}</span>
       <span class="small status">{{ c.detail or "" }}</span></div>
-    {% endif %}
   </div>
+  {% endif %}
   {% endfor %}
   {% set making = mclips and mclips[0].state in ("queued", "working") %}
   <form method="post" action="/moments/{{ m.id }}/clip" style="margin-top:10px">
@@ -127,44 +96,6 @@
 </div>
 {% endfor %}
 {% endif %}
-
-<script>
-// Copy the post text. The dashboard is plain http, where the modern clipboard
-// API is off, so this selects the text and uses the older copy command.
-document.querySelectorAll("button.copy").forEach(function (btn) {
-  btn.addEventListener("click", function () {
-    const box = btn.closest(".copybox").querySelector("textarea.posttext");
-    box.focus(); box.select();
-    let ok = false;
-    try { ok = document.execCommand("copy"); } catch (e) {}
-    btn.textContent = ok ? "Copied" : "Selected: press Cmd+C";
-    setTimeout(function () { btn.textContent = "Copy"; }, 2500);
-  });
-});
-
-// Keep a draft of every note in this browser while it is typed, so a note is
-// never lost if the Pi is restarting when it is sent. Cleared once saved.
-(function () {
-  let store = null;
-  try { store = window.localStorage; } catch (e) { return; }
-  document.querySelectorAll("form textarea[name=note]").forEach(function (box) {
-    const key = "clippzz-draft:" + box.form.getAttribute("action");
-    let draft = null;
-    try { draft = store.getItem(key); } catch (e) {}
-    if (draft !== null) {
-      if (box.value.trim() === draft.trim()) {
-        try { store.removeItem(key); } catch (e) {}
-      } else if (!box.value.trim()) {
-        box.value = draft;
-        box.insertAdjacentHTML("afterend", '<span class="small dim">Restored your unsent note.</span>');
-      }
-    }
-    box.addEventListener("input", function () {
-      try { store.setItem(key, box.value); } catch (e) {}
-    });
-  });
-})();
-</script>
 
 {% if clip_busy %}
 <script>

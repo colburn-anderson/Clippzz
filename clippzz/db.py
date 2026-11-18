@@ -69,7 +69,8 @@ def connect() -> sqlite3.Connection:
     conn.executescript(SCHEMA)
     # Columns added after the first release: add them to older databases.
     for table, column in (("clips", "rerender INTEGER NOT NULL DEFAULT 0"),
-                          ("clips", "music_credit TEXT"), ("vods", "channel_url TEXT")):
+                          ("clips", "music_credit TEXT"), ("vods", "channel_url TEXT"),
+                          ("clips", "posted_at REAL")):
         try:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
         except sqlite3.OperationalError:
