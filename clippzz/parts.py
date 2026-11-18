@@ -47,8 +47,10 @@ the start of the stream and the caption text around it (">>" marks a change \
 of speaker).
 
 Choose the hits that belong in this clip: the same running joke or story as \
-the moment, with a clear line or reaction that works on screen. Skip hits \
-that only share a word but are about something else. At most 6; if more \
+the moment, with a clear line or reaction that works on screen. Always take \
+the first time the joke comes up, because it sets the joke up. A line the \
+streamer or a friend says beats one read out from chat or a donation. Skip \
+hits that only share a word but are about something else. At most 6; if more \
 qualify, keep the strongest. For each, give start_s and end_s in stream \
 seconds: start 2 to 3 seconds before the key line so it is not cut off, and \
 end after the line and any quick reaction, 5 to 15 seconds in all. Give an \
