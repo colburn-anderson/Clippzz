@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS clips (
     words TEXT,                     -- JSON speech-to-text words, kept for re-renders
     title TEXT, duration_s REAL, cost_usd REAL, path TEXT,
     rating TEXT, note TEXT, rated_at REAL,
+    rerender INTEGER NOT NULL DEFAULT 0,   -- 1: render again from the saved plan
     created_at REAL NOT NULL, updated_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS clips_moment ON clips(moment_id);
@@ -65,6 +66,10 @@ def connect() -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.executescript(SCHEMA)
+    try:  # databases made before the rerender column existed
+        conn.execute("ALTER TABLE clips ADD COLUMN rerender INTEGER NOT NULL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
     return conn
 
 
@@ -123,6 +128,15 @@ def next_clip(conn):
     clippzz.clipper) is "working" and must be left alone."""
     return conn.execute(
         "SELECT * FROM clips WHERE state='queued' ORDER BY created_at LIMIT 1").fetchone()
+
+
+def queue_rerender(conn, clip_id: int):
+    """Ask the worker to render a clip again from its saved plan (no API cost).
+    Going through the worker means only one process ever touches a clip."""
+    conn.execute("UPDATE clips SET state='queued', rerender=1, attempts=0,"
+                 " detail='Waiting to render again', updated_at=? WHERE id=? AND plan IS NOT NULL",
+                 (time.time(), clip_id))
+    conn.commit()
 
 
 def requeue_interrupted_clips(conn) -> int:

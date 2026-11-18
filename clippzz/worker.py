@@ -130,7 +130,7 @@ def run_clip(conn, clip):
     cid = clip["id"]
     log.info("making clip %s (attempt %s)", cid, clip["attempts"] + 1)
     try:
-        clipper.make(conn, cid)
+        clipper.make(conn, cid, rerender=bool(clip["rerender"]))
     except BudgetReached as e:
         db.set_clip(conn, cid, "failed", str(e))
     except anthropic.AuthenticationError:

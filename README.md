@@ -45,8 +45,8 @@ Press **Make a clip** on a moment to turn it into a finished Short. The worker d
 | Set up the USB SSD (erases it) | `sudo bash scripts/pi-ssd.sh /dev/sda` |
 | Free the SD card after the SSD move | `sudo bash scripts/pi-ssd.sh --cleanup` |
 | Fan control | `bash scripts/pi-fan.sh <GPIO> [temperature]` |
-| Make a clip by hand | `docker compose exec worker python -m clippzz.clipper --moment <id>` |
-| Render a clip again from its saved plan | `docker compose exec worker python -m clippzz.clipper --clip <id> --rerender` |
+| Queue a clip by hand | `docker compose exec worker python -m clippzz.clipper --moment <id>` |
+| Render a clip again from its saved plan (free) | `docker compose exec worker python -m clippzz.clipper --clip <id> --rerender` |
 | Run the tests | `docker compose exec worker python -m unittest discover tests` |
 
 `scripts/pi-update.sh` pulls a new commit on `main` and restarts the containers. To make the Pi do that by itself every 5 minutes, add it to cron (not set up yet):

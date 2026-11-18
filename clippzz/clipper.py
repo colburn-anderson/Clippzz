@@ -4,9 +4,9 @@ download the moment in HD (RAM scratch) -> speech-to-text with word timings
 -> frames twice a second -> the planner writes the edit -> the renderer
 follows it -> the MP4 is saved under /data/clips.
 
-Run by the worker for clips queued from the dashboard, or by hand:
-    python -m clippzz.clipper --moment 10          new clip from moment 10
-    python -m clippzz.clipper --clip 3 --rerender  render clip 3 again from its saved plan
+Run by the worker for clips queued from the dashboard. By hand:
+    python -m clippzz.clipper --clip 3 --rerender   queue clip 3 to render again from its saved plan
+    python -m clippzz.clipper --moment 10 --here    make a clip right here (stop the worker first)
 """
 import argparse
 import gzip
@@ -213,7 +213,7 @@ def make(conn, clip_id: int, keep: bool = False, rerender: bool = False) -> dict
             detail += f". Music credit for the description: {stats['music_credit']}"
         elif stats.get("music"):
             detail += f". Music: {stats['music']}"
-        db.set_clip(conn, clip_id, "done", detail, path=str(final), duration_s=stats["duration_s"])
+        db.set_clip(conn, clip_id, "done", detail, path=str(final), duration_s=stats["duration_s"], rerender=0)
         log.info("clip %s: done %s", clip_id, stats)
         return stats
     finally:
@@ -227,10 +227,24 @@ def main():
     ap.add_argument("--clip", type=int, help="clip id: run this clip again")
     ap.add_argument("--rerender", action="store_true", help="reuse the clip's saved plan and words")
     ap.add_argument("--keep", action="store_true", help="keep the scratch files (for re-renders)")
+    ap.add_argument("--here", action="store_true",
+                    help="run in this process instead of the worker's queue (stop the worker first)")
     args = ap.parse_args()
     if not (args.moment or args.clip):
         ap.error("give --moment or --clip")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+    if not args.here:
+        # The worker does the work, so two processes never touch the same clip.
+        with db.session() as conn:
+            if args.clip and args.rerender:
+                db.queue_rerender(conn, args.clip)
+                print(f"clip {args.clip} queued to render again; watch: docker compose logs -f worker")
+            elif args.moment:
+                cid = db.add_clip(conn, args.moment)
+                print(f"clip {cid} queued; watch: docker compose logs -f worker")
+            else:
+                ap.error("to run clip --clip again with a new plan, use the dashboard's Make a clip button")
+        return
     with db.session() as conn:
         clip_id = args.clip or db.add_clip(conn, args.moment)
         try:
