@@ -12,9 +12,9 @@ Prove that an automated system can make short clips that go viral, then turn tha
 
 | Area | Decision |
 | --- | --- |
-| Clip engine | Built in this repo and run on the Raspberry Pi 4: yt-dlp, ffmpeg, whisper.cpp, Piper and a Claude model through the Anthropic API. No paid clipping service. Higgsfield's Personal Clipper has no public API, and its pages do not say how it picks moments or which edits it adds, so it stays a manual benchmark: run the same VOD through it by hand and compare. |
-| Clip format | Meme-style edit, 30 to 50 seconds: a short story (setup and payoff, two or three segments) with word-by-word captions throughout, plus colour flashes with sound effects, punch-in zooms, whip transitions and small props (emoji, arrows, circles, effort meter) chosen to fit it. A visible beat every 2 to 4 seconds. Some clips get a one-sentence AI voiceover as a bridge between segments. No fixed template. Full detail in [STYLE.md](STYLE.md). |
-| Style reference | The user's example Shorts: https://youtube.com/shorts/dz0OGGXHBVU and https://youtube.com/shorts/KKwER8qiAP4 (more to come), analysed in [STYLE.md](STYLE.md) |
+| Clip engine | Built in this repo and run on the Raspberry Pi 4: yt-dlp, ffmpeg, whisper.cpp and a Claude model through the Anthropic API. Higgsfield's Personal Clipper has no public API, and its pages do not say how it picks moments or which edits it adds, so it stays a manual benchmark. Ready-made AI editors were checked on November 18, 2026 (see "Existing editors" below). None does the part that makes the target format work, so the edit engine is pending the user's decision. |
+| Clip format | The ClippingMania format (user, November 18, 2026): one bit that works with the sound off, 12 to 25 seconds, cut every 1.5 to 2.5 seconds with every pause removed. Stage-direction captions in meme slang tell the story (`*SHAVES HEAD*` → `*REGRET*` → `*CRIES*`). Speech captions run one or two words at a time, plus colour hits, punch-in zooms and short sound stings. Full detail in [STYLE.md](STYLE.md). The longer stitched-story format from the first two examples may come back later as a second format. |
+| Style reference | Main target: the [ClippingMania](https://www.youtube.com/channel/UCQkh3PuF3CRHlV8mHBKreCA) channel, with https://youtube.com/shorts/eUFkorW-1kk as the user's example. Earlier examples: https://youtube.com/shorts/dz0OGGXHBVU and https://youtube.com/shorts/KKwER8qiAP4. All are analysed in [STYLE.md](STYLE.md). |
 | Sources | IShowSpeed VODs from the [@IShowSpeed streams tab](https://www.youtube.com/@IShowSpeed/streams). Stable Ronaldo streams on Twitch; his full streams reach YouTube as uploads on [Stable Ronaldo Live](https://www.youtube.com/channel/UCLldJScHWCtsFlfanYXS8nQ). Links pasted in by hand at first. |
 | Accounts | One main account each on YouTube, Instagram and Facebook. Niche accounts later if data supports them. |
 | Income order | 1. Reach. 2. Ad revenue where eligible. 3. Paid clipping campaigns (Whop Content Rewards and similar) only after the account has traction. |
@@ -28,11 +28,26 @@ Prove that an automated system can make short clips that go viral, then turn tha
 
 | Piece | Status |
 | --- | --- |
-| Intake, analyzer, ranker, review dashboard | Built and running on the Pi (dashboard on port 8787) |
-| Edit planner, renderer, prop and meme library | Next |
+| Intake, analyzer, ranker, review dashboard | Built and running on the Pi (dashboard on port 8787). First test: a 12-hour Speed and Kai Cenat Minecraft VOD took 20 minutes and cost $0.47, and gave 8 "maybe" moments. The user says they all have potential but need a much better edit. |
+| Edit planner, renderer, sound library | Next, for the ClippingMania format. Waiting on the user's choice between building it here and an existing editor. |
 | Scheduler, publishers, stats, alerts | Month 1 |
 
 How it differs from the outline below: the ranker's first pass ("scout", Claude Haiku 5.5) reads the entire transcript in ten-minute stretches, which costs about a cent per VOD, so there is no separate signal-based shortlist. Loudness and the heatmap are passed to it as hints. The second pass ("judge", Claude Opus 5.5) sees eight frames and the timed transcript for the top ten moments.
+
+### Existing editors (checked November 18, 2026)
+
+| Tool | What it does automatically | API | Price | Fit for the ClippingMania format |
+| --- | --- | --- | --- | --- |
+| [Submagic](https://docs.submagic.co/api-reference/create-project) | Word-by-word caption templates, auto-zoom, silence removal down to 0.1–0.2 s gaps, bad-take removal, stock or AI B-roll, music, hook title, your own media inserted at set times | Yes, on the Business + API plan (100 API minutes a month) | About $69 a month yearly, $120 monthly for the API plan | Captions and pause-cutting only. No sound effects, colour hits or stage directions through the API, and it can't pick beats from the picture. Over budget. |
+| [OpusClip](https://help.opus.pro/api-reference/overview) | Finds clips in long videos, captions, brand templates, posting | Yes, on Pro (beta) and up | Pro plan | Built for 30 to 90 second talking clips. No stage directions or meme sounds found. |
+| [Eklipse AI Edit](https://eklipse.gg/features/ai-edit) | Adds memes, sound effects, captions and zooms to gaming clips; uploads up to 5 minutes | No | About $12.50 to $25 a month | Library built for gaming clips. Mixed reviews. Manual uploads only. |
+| [Vidova](https://vidova.ai/) | Agent editor: you say what's funny, it places sounds, captions and cuts | No public API (MCP connector only) | From $19 a month | Unproven for this format. Manual. |
+
+What makes the target format work is choosing which beats to keep from the picture and writing a funny stage direction for each. No tool found does either; both are vision-and-humour judgement, the kind of task Claude is used for in this pipeline. The rest of the format (tight cuts, one-word captions, colour tints, zooms, a sound sting) is plain ffmpeg work.
+
+### Money reference
+
+ClippingMania made 126.4 million Shorts views in 15 months. At the $0.01 to $0.07 per 1,000 Shorts views most 2026 guides report, that is roughly $1,300 to $8,800 if it was monetized the whole time (unverified; guides vary). 79 percent of its views came from 18 Shorts and the median Short got 33,000 views, so income depends on a few hits. YouTube's reused-content rules can refuse monetization for clips of other creators without real creative input. The stage-direction edit is that input; a bare caption-and-crop would not be.
 
 Storage care until the USB SSD arrives: scratch files (frames, section downloads) live in RAM, the audio scan is streamed and never saved, code is mounted read-only into the containers, container logs are capped at 4 MB, and the only regular writes are the SQLite database and a compressed transcript per VOD.
 
@@ -40,9 +55,9 @@ Storage care until the USB SSD arrives: scratch files (frames, section downloads
 
 1. **Intake:** paste a VOD link in the dashboard. A watcher for new VODs comes in month 1.
 2. **Analyzer:** finds candidate moments without downloading the whole video. Main signals: YouTube auto-captions (always present, with per-word timing and tags such as `[screaming]` and `[laughter]`) and loudness peaks from an audio-only download. Bonus signals when present: the "most replayed" heatmap, live chat replay, and which moments other clip channels already turned into popular Shorts (a sign the moment is funny; our edit must still be our own). See "Source signals" below for why the first two are often missing.
-3. **Ranker:** funny first, in two passes. A cheaper Claude model reads every transcript window and keeps only those with a real joke, reaction, fail or story beat. A stronger Claude model then looks at frames plus transcript for the survivors, scores each from 0 to 100 on "would someone send this to a friend", explains the joke in one line, sets start and end, groups setups with payoffs, and flags unsafe content. Anything it cannot explain as funny or entertaining is dropped, even if the signals were loud.
-4. **Edit planner:** a Claude model with vision looks at frames and the transcript of the chosen segments and writes an edit plan following [STYLE.md](STYLE.md): caption styling and keyword colours, stage-direction captions, flashes, sound effects, zooms, props, transitions, up to two brief meme cutaways (0.5 to 2 seconds, then back to the clip), and whether a bridge voiceover fits. Props and sounds come from a library tagged by mood (shock, laughter, disbelief, hype, fail, wholesome).
-5. **Renderer:** downloads only the chosen segments, crops to fill 1080×1920 on the people (face-tracked; no blurred bars), and applies the edit plan with ffmpeg. A facecam-plus-gameplay layout comes later for gaming streams.
+3. **Ranker:** funny first, in two passes. A cheaper Claude model reads every transcript window and keeps only those with a real joke, reaction, fail or story beat. A stronger Claude model then looks at frames plus transcript for the survivors, scores each from 0 to 100 on "would someone send this to a friend", explains the joke in one line, sets start and end, groups setups with payoffs, and flags unsafe content. Anything it cannot explain as funny or entertaining is dropped, even if the signals were loud. For the ClippingMania format it should favour one visual bit that works with the sound off, on IRL camera footage, over talk-heavy moments or small facecams. The current prompts don't do this yet.
+4. **Edit planner:** a Claude model with vision looks at the moment at 2 frames a second, with word timings from whisper, and writes an edit plan following [STYLE.md](STYLE.md). The plan sets the keep-spans (the shortest run of beats that still tells the bit, 12 to 25 seconds in total), a stage-direction caption for each beat without speech, speech caption colours, colour hits, black-and-white "loss" beats, punch-ins, the crop centre for each span, and sound stings. A rare meme cutaway is allowed. Sounds come from a small library tagged by mood (shock, laughter, disbelief, hype, fail, loss).
+5. **Renderer:** downloads only the chosen section, cuts it to the keep-spans, crops to fill 1080×1920 on the people (no blurred bars), and applies the plan with ffmpeg and ASS captions. Gaming streams with a small facecam are a poor fit for this format; skip them or add a facecam layout later.
 6. **Review:** the user watches each clip in the dashboard, rates it and leaves a note.
 7. Month 1 and later: scheduler, publishers (YouTube Data API, Instagram Graph API, Facebook Pages API), stats collector, Telegram alerts.
 

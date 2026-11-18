@@ -1,10 +1,67 @@
 # Clippzz edit style
 
-What the two example Shorts actually do, measured frame by frame on November 17, 2026. The edit planner should treat this as its style guide. Add a section for each new example Short.
+The edit planner's style guide. The main target since November 18, 2026 is the ClippingMania channel. The user said it is "exactly what I am trying to replicate". Its format comes first. The two earlier examples use a longer stitched-story format and follow below. They may come back later as a second format.
 
-Method: both Shorts were downloaded with yt-dlp, sampled at 2 frames a second into contact sheets, run through ffmpeg scene-cut detection and an EBU R128 loudness scan, and matched against YouTube's auto-captions. Sound effects are inferred from loudness jumps that line up with on-screen flashes; nobody listened to the audio, so treat the sound notes as likely, not certain.
+Method (both studies): Shorts downloaded with yt-dlp, sampled into contact sheets at 2 to 4 frames a second, run through ffmpeg scene-cut and silence detection, and matched against YouTube's auto-captions. Nobody listened to the audio, so sound notes are inferred and should be confirmed by ear.
 
-## The two examples
+## Main target: ClippingMania (studied November 18, 2026)
+
+Channel: [ClippingMania](https://www.youtube.com/channel/UCQkh3PuF3CRHlV8mHBKreCA), 42,100 subscribers. First Short on August 27, 2025; 490 Shorts by November 18, 2026, about one a day. Mostly Kai Cenat and his circle (190 of 490 titles), with some IShowSpeed (24) and Stable Ronaldo (20).
+
+Views are a hits business:
+
+| Measure | Value |
+| --- | --- |
+| Total Shorts views | 126.4 million |
+| The 2 biggest Shorts | 43 million (34 percent of all views) |
+| The 18 Shorts over 1 million | 100 million (79 percent) |
+| Median Short | 33,000 views |
+| Spread | 18 over 1 million, 47 from 100,000 to 1 million, 366 from 10,000 to 100,000, 59 under 10,000 |
+
+### The five studied
+
+| Short | Views | Length | Hard cuts | Premise |
+| --- | --- | --- | --- | --- |
+| [MARLON GOES BALD!!!](https://youtube.com/shorts/9wXnmr7UCZk) | 23.9 M | 15.5 s | 8 | Shaves his own head on stream, regrets it, cries, reveals the bald head |
+| [Speed Got FAT!!!](https://youtube.com/shorts/eUFkorW-1kk) | 20.5 M | 13.7 s | 5, plus zoom changes | Pushes his stomach out to look fat, flips between fat and skinny, "I'M PREGNANT!" |
+| [Rakai BUYS an IRON MAN HELMET!!!](https://youtube.com/shorts/ZSUFoSfCAYI) | 9.95 M | 18.1 s | 12 | "JARVIS, OPEN MASK!" and the helmet won't open |
+| [DUKE DENNIS GETS CALLED TRASH BY A LITTLE KID](https://youtube.com/shorts/MKA11NptYVw) | 4.79 M | 17.2 s | 8 | Falls off a skateboard, a kid on a scooter says "you are trash" |
+| [Kai Cenat PANICS Thinking He Lost His Phone!](https://youtube.com/shorts/kG5YkP9jowI) | 50,000 | 17.1 s | about 20 (handheld) | Panics about his phone on a boat in Japan |
+
+All 18 Shorts over 1 million views are 12 to 26 seconds long, and recent ones run 11 to 21 seconds.
+
+### The formula
+
+1. **One bit, not a stitched story.** Each Short is a single premise from one moment that you understand with the sound off: a bald head, a helmet that won't open, a fall, a fake belly. The "story" is that one bit told in beats: setup (1 to 3 seconds), the action step by step, the reaction, the payoff.
+2. **12 to 25 seconds.** Never longer than 26 seconds among the hits.
+3. **Chopped hard.** A cut every 1.5 to 2.5 seconds. Silence detection (−35 dB, 0.15 s) found no pause at all in four of the five and one 0.3 s pause in the fifth. The raw moment is several times longer; everything between the beats is cut out.
+4. **Stage directions tell the story.** Every beat without speech gets an asterisk caption that narrates it, often in meme slang. The jokes live here:
+   - Marlon: `*SHAVING CREAM*` → `*APPLIES*` → `*SHAVES HEAD*` → `*REGRET*` → `*CRIES*`
+   - Duke Dennis: `*RIDING*` → `*FALLS*` → `*SHOE COOKED*`
+   - Rakai: `*AURA LOSS*` each time the mask fails to open
+   - Speed: `*GETS FAT*`, then `*SKINNY*` / `*FAT*` as he flips back and forth
+   - Kai: `*LOOKS FOR PHONE*`, and `*PHONE*` with a red arrow pointing at it
+5. **Speech captions one or two words at a time.** Centre of the frame, heavy rounded all-caps with a thick black outline. The colour changes by phrase between yellow, white and cyan. Emotional stage directions (`*REGRET*`, `*CRIES*`, `*AURA LOSS*`) are pink or red. Words are written as said, not as YouTube's auto-captions heard them: auto-captions had "Oh Carl" for `OH MY CHAT!` and "Oh, granny" for `I'M PREGNANT!`. Swearing is starred: `SH*T`.
+6. **Colour hits.** One or two frames of full green, red or blown-out white tint on a punch word. The picture drops to black and white on a "loss" beat (`*AURA LOSS*`).
+7. **Punch-in zooms** on reactions, and zoom or shake transitions between cuts.
+8. **Almost no props.** One red arrow in five Shorts. No emoji, no meme video cutaways, no voiceover, no watermark, no intro or outro.
+9. **Sound (inferred, confirm by ear).** Auto-captions tag `[music]` at 0.65 s in the Speed Short and `[bell]` at 4.6 s in the Kai Short, so short sound stings very likely mark beats. The streamer's own audio stays up front.
+10. **Footage.** IRL camera footage cropped to fill 9:16. None of the five comes from a gaming stream.
+11. **Titles.** `NAME DOES THING!!! 😂🤯 #name` in caps on most hits; newer ones use Title Case, still with emoji and the creators' hashtags.
+
+### Rules for the edit planner (this format)
+
+1. Pick one bit that works muted. Raw window 15 to 90 seconds; final clip 12 to 25 seconds.
+2. From frames (2 a second) and word timings, choose the keep-spans: the shortest set of beats that still tells the bit from setup to payoff. Each span is 0.5 to 3 seconds. Cut every pause and every line the viewer doesn't need.
+3. Write a stage-direction caption for every beat that has no speech, in the creator's world and in meme slang, short (one to three words) and in asterisks. They should be funny on their own.
+4. Caption all kept speech, one or two words at a time, timed to the word, colour changing by phrase. Use a proper transcription (whisper), not YouTube's auto-captions.
+5. Add a colour hit or a punch-in on every punch word and reaction, about one every 2 seconds. Use black and white for a loss or a fail.
+6. Use a short sound sting on hits only from the tagged library. Never cover the dialogue.
+7. Crop to fill 1080×1920 on the people. No blurred bars.
+8. Meme cutaways (user, November 18, 2026) are allowed, but none of the five uses one, so add one only where it clearly makes the bit funnier.
+9. Title in the channel's pattern, and credit the creator in the description.
+
+## Earlier examples: longer story format (studied November 17, 2026)
 
 | | Example 1 | Example 2 |
 | --- | --- | --- |
@@ -17,91 +74,32 @@ Method: both Shorts were downloaded with yt-dlp, sampled at 2 frames a second in
 | Mood | Hype and redemption: fail, then comeback | Wholesome and funny: a running joke between two friends |
 | Story | Speed fails a 440 lb deadlift after a woman lifts it, then (at a different event) tries to lift a car | Rudy steals Speed's food on a boat, then (on a different night) the two joke about looking tired |
 
-## What both do
+### What both do
 
-1. **Stitch two moments into one story.** Neither is a single continuous segment. Each joins two moments from different streams or days into a setup and a payoff. Example 1 even adds a narrator line to bridge them.
-2. **Fill the frame. No blurred bars.** Both crop tight on the people and fill the whole frame. Neither uses a blurred-background letterbox. Neither is exactly 9:16; YouTube shows them full height with the sides filled by the app.
-3. **Captions on every spoken line.** Captions appear word by word in sync with speech and stay on screen almost the whole clip. They are the backbone of the edit.
-4. **Stage directions in asterisks.** Short caption lines in the clip's own voice describe what is happening: `*hyping up speed*`, `*lifting a car*`, `*provoking speed*`, `*failed to lift*`, `*final try*`, `*speed was having his food*`, `*rudy goes for a bite*`.
-5. **Full-screen colour flashes on hits.** A single frame or two tinted solid red, green, pink or yellow marks a punchline, a cut or a reaction. Example 1 has six; example 2 has five. Each lines up with a loudness jump, so a hit or whoosh sound effect very likely plays with it.
-6. **Punch-in zooms on faces.** Sudden crops in to a face at reaction moments (example 1 at 7 s, 8 s and 26 s; example 2 at 5 s, 12 s, 16 s and 28 s). These are hard cuts to a tighter crop, sometimes with a short motion blur, not slow Ken Burns zooms.
-7. **Motion-blur whip transitions** between moments (example 1 at 46 s; example 2 at 20 s and 31 s).
-8. **Small graphic props, not meme clips.** Neither example cuts away to an outside meme video or image. The "meme" layer is small overlays placed on the footage: emoji, arrows, circles and meters (details below).
-9. **A creator-handle watermark** sits in the lower middle (`@nexxorecaps`) or lower left (`SKYFTBL`) for the whole clip.
-10. **No intro card and no outro card.** Both open straight on the first line of dialogue. Example 2 ends on a short caption payoff ("BROTHERHOOD" with a heart) and fades to black.
+1. **Stitch two moments into one story.** Each joins two moments from different streams or days into a setup and a payoff. Example 1 adds a narrator line to bridge them.
+2. **Fill the frame. No blurred bars.** Both crop tight on the people.
+3. **Captions on every spoken line,** word by word, on screen almost the whole clip.
+4. **Stage directions in asterisks:** `*hyping up speed*`, `*lifting a car*`, `*failed to lift*`, `*rudy goes for a bite*`.
+5. **Full-screen colour flashes on hits,** one or two frames of red, green, pink or yellow, each lining up with a loudness jump (a sound effect, very likely).
+6. **Punch-in zooms on faces** at reactions, as hard cuts to a tighter crop.
+7. **Motion-blur whip transitions** between moments.
+8. **Small graphic props, not meme clips:** an effort meter that fills while Speed strains, a red circle, a curved arrow, a skull emoji, a heart emoji.
+9. **A creator-handle watermark** for the whole clip.
+10. **No intro or outro card.**
 
-## Captions
+### Captions in this format
 
-| Property | Value |
-| --- | --- |
-| Font | Very heavy, all-caps sans serif (Impact or Montserrat Black style) |
-| Size | About 6 to 8 percent of frame height per line; at most two lines and about four words a line |
-| Position | Middle of the frame (about 45 to 55 percent down), over the speaker's chest, not at the bottom |
-| Reveal | Word by word, timed to speech; the full line stays until the next line |
-| Base colour | White with a thick black outline and drop shadow |
-| Keyword colour | One or two words per line switch to a bright colour: red, yellow, lime green, cyan or magenta. Chosen for meaning (red for "lost", "stop", "didn't"; green for "stronger", "hungry", "joking"; yellow for "eat", "me", "your eyes") |
-| Glow | Example 2 adds a soft coloured glow behind the keyword |
-| Profanity | Bleeped in text with dashes: `F--KING` |
-| Stage directions | Same font, wrapped in asterisks, one colour for the whole line |
+Very heavy all-caps sans serif, two lines of up to four words, middle of the frame. White with a black outline, one or two keywords per line in a bright colour chosen for meaning (red for "lost", green for "stronger"). Profanity dashed: `F--KING`.
 
-## Graphic props seen
+### Voiceover
 
-| Prop | Where | What it does |
-| --- | --- | --- |
-| Effort meter | Example 1 at 11.5–14.5 s and 35–37 s | A vertical battery-style bar beside Speed's head that fills from green to red while he strains, then drains when he fails |
-| Red circle | Example 1 at 20.5–23 s | Circles a person in the background, with the caption `*lifting with a guy on the car*` |
-| Curved arrow | Example 2 at 18–19.5 s | Points at Speed's face under `JUST JOKING` |
-| Skull emoji ☠️ | Example 1 at 46.5–47 s | Placed on Speed after the final failed lift |
-| Heart emoji ❤️ | Example 2 at 31.5–33 s | Next to the closing `BROTHERHOOD` caption |
+Example 1 uses one narrator line as a bridge between its two moments ("Speed lost this challenge horribly, but watch how he took it personally and came back even stronger."). Use one only when two stitched moments need a sentence to connect them: one sentence of about 4 seconds, captioned.
 
-## Voiceover
+### Sound and pacing
 
-Example 1 uses one narrator line (11.9 to 16.7 s): "Speed lost this challenge horribly, but watch how he took it personally and came back even stronger." It is a **bridge in the middle**, not an intro. It explains the jump between the two moments in one sentence, and its words are captioned like dialogue. Example 2 has no voiceover.
-
-Rule for the planner: use a voiceover only when two stitched moments need a sentence to connect them, keep it to one sentence of about 4 seconds, and caption it.
-
-## Sound
-
-- **Loudness:** example 1 is mastered extremely hot, around −2 to −6 LUFS momentary for most of its length, so it feels loud on a phone. Example 2 sits around −10 to −20 LUFS, with jumps to −4 on punchlines.
-- **Music bed:** auto-captions tag `[music]` near the end of example 1. The quiet opening of example 2 also suggests a soft music bed under the speech. Ours must use royalty-free music only.
-- **Sound effects (inferred):** loudness jumps line up with the colour flashes at 4 s and 20.5 s in example 2, and the flashes in example 1. Expect a hit, boom or whoosh on each flash.
-- Original stream audio (the streamer screaming, the crowd) stays loud and up front. Effects punctuate it; they never cover the dialogue.
-
-## Pacing
-
-| Measure | Example 1 | Example 2 |
-| --- | --- | --- |
-| Hard cuts | 7 in 47 s (one every 6–7 s) | 12 in 33 s (one every 3 s) |
-| Colour flashes | 6 | 5 |
-| Punch-in zooms | 3 | 4 |
-| Graphic props | 4 | 2 |
-| Big beats in total (flash, zoom, prop, whip) | about 14, one every 3–4 s | about 13, one every 2–3 s |
-| Seconds with a caption on screen | about 90 percent | about 70 percent |
-
-So the "2 to 5 edit beats per clip" in the original plan is too few. The examples land a visible beat every 2 to 4 seconds, with captions running underneath the whole time.
-
-## Rules for the edit planner
-
-1. Pick a story, not a single moment: a setup and a payoff, from one VOD at first. Two or three segments joined by hard cuts or whip transitions.
-2. Length 30 to 50 seconds.
-3. Crop to fill the frame on the people (face-tracked), at 1080×1920. Never blurred bars.
-4. Caption every spoken word, word by word, in the style above, with one or two coloured keywords a line.
-5. Add stage-direction captions in asterisks when the action matters more than the words.
-6. Land a beat every 2 to 4 seconds: colour flash plus sound effect, punch-in zoom, whip transition, or a prop.
-7. Props come from a small library: effort meter, circle, arrow, and emoji (skull, heart, fire, crying-laughing, cold face). Pick by mood. A brief meme cutaway is allowed too (see below).
-8. Voiceover only as a one-sentence bridge between two moments.
-9. Loud master (around −8 LUFS integrated), dialogue always clear, royalty-free music bed at low level.
-10. Handle watermark lower middle. No intro or outro cards.
-11. Title: a short claim plus one emoji plus `#ishowspeed` (or the creator's tag), and credit the creator in the caption.
-
-## Meme cutaways (user decision, November 18, 2026)
-
-Neither example uses one, but the user wants them: a brief cut away to a meme clip or image (a reaction, a famous sound bite, a movie moment) that comments on what just happened, then a cut straight back so the original clip carries on. Rules:
-
-- 0.5 to 2 seconds each, at most two per clip, only where the joke gets funnier for it.
-- The original audio pauses or ducks under the meme's own sound, then picks up where it left off.
-- Only from the tagged library, and no commercial music in it (see PLAN.md rules).
+Example 1 is mastered very loud (around −2 to −6 LUFS momentary); example 2 sits around −10 to −20 with jumps on punchlines. Both have a low music bed. Example 1 has 7 hard cuts in 47 s and example 2 has 12 in 33 s. Each lands a visible beat (flash, zoom, prop or whip) every 2 to 4 seconds.
 
 ## Open questions
 
-- Both examples come from IRL streams shot on a handheld camera. Gaming streams with a facecam and gameplay (common for Stable Ronaldo) will need their own layout; the examples do not show one yet.
+- Which sounds ClippingMania uses on its hits. The user can name them by ear (vine boom, bell, record scratch, crying sound and so on), and that becomes the first sound library.
+- Gaming streams with a small facecam (like the Minecraft test VOD) don't appear in ClippingMania's hits. Either skip them or design a facecam layout later.
