@@ -11,6 +11,13 @@ SOURCES_DIR = DATA_DIR / "sources"
 CLIPS_DIR = DATA_DIR / "clips"
 # Speech-to-text model files, downloaded once.
 MODELS_DIR = DATA_DIR / "models"
+# The owner's meme sounds and background music (SSD network drive, Clippzz/
+# sounds and Clippzz/music, mounted read-only into the worker).
+LIBRARY_DIR = Path(os.environ.get("CLIPPZZ_LIBRARY", "/library"))
+# Synthesised stand-in stings when the sound folder is empty. Off by default:
+# the owner found them unfunny ("they take away from the action").
+SYNTH_SOUNDS = os.environ.get("CLIPPZZ_SYNTH_SOUNDS", "0") == "1"
+EMOJI_FONT = os.environ.get("CLIPPZZ_EMOJI_FONT", "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf")
 
 # Scout reads every minute of the transcript, so it is the cheap model.
 SCOUT_MODEL = os.environ.get("CLIPPZZ_SCOUT_MODEL", "claude-haiku-5-5")
@@ -24,8 +31,10 @@ PLANNER_EFFORT = os.environ.get("CLIPPZZ_PLANNER_EFFORT", "high")
 # accurate model that still runs in a couple of minutes per clip on a Pi 4.
 WHISPER_MODEL = os.environ.get("CLIPPZZ_WHISPER_MODEL", "small.en")
 WHISPER_THREADS = int(os.environ.get("CLIPPZZ_WHISPER_THREADS", "3"))
-# Seconds of extra footage fetched either side of a judged moment.
-CLIP_PAD_S = 10
+# Extra footage fetched around a judged moment. Lots after it, because the
+# owner wants to see how a bit ends, which often happens a minute later.
+CLIP_PAD_BEFORE_S = 10
+CLIP_PAD_AFTER_S = 75
 
 # Dollars per million tokens (input, output), used to track spend.
 PRICES = {

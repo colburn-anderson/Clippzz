@@ -128,7 +128,7 @@ def rate(mid: int, rating: str = Form(...), note: str = Form("")):
         if not row:
             raise HTTPException(404, "No such moment")
         conn.execute("UPDATE moments SET rating=?, note=?, rated_at=? WHERE id=?",
-                     (None if rating == "clear" else rating, note.strip()[:500] or None, time.time(), mid))
+                     (None if rating == "clear" else rating, note.strip()[:4000] or None, time.time(), mid))
     return RedirectResponse(f"/vod/{row['vod_id']}#m{mid}", status_code=303)
 
 
@@ -168,7 +168,7 @@ def rate_clip(cid: int, rating: str = Form(...), note: str = Form("")):
         if not row:
             raise HTTPException(404, "No such clip")
         conn.execute("UPDATE clips SET rating=?, note=?, rated_at=? WHERE id=?",
-                     (None if rating == "clear" else rating, note.strip()[:500] or None, time.time(), cid))
+                     (None if rating == "clear" else rating, note.strip()[:4000] or None, time.time(), cid))
     return RedirectResponse(f"/vod/{row['vod_id']}#c{cid}", status_code=303)
 
 

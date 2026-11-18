@@ -6,3 +6,5 @@ python-multipart>=0.0.12
 yt-dlp[default]
 # Speech-to-text with word timings for the clip captions.
 faster-whisper>=1.1
+# Draws emoji stickers from the Noto Color Emoji font.
+pillow>=11

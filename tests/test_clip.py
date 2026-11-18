@@ -9,7 +9,7 @@ from pathlib import Path
 os.environ.setdefault("CLIPPZZ_DATA", tempfile.mkdtemp())
 os.environ.setdefault("CLIPPZZ_WORK", tempfile.mkdtemp())
 
-from clippzz import planner, render  # noqa: E402
+from clippzz import captions, clipper, config, emoji, planner, render, sounds  # noqa: E402
 
 BEATS = [{"start_s": 10.0, "end_s": 12.0}, {"start_s": 20.0, "end_s": 21.5, "zoom": 1.3}]
 
@@ -127,14 +127,107 @@ class PlanTidyTest(unittest.TestCase):
         ]}, words, duration=12.0)
         b = plan["beats"]
         self.assertAlmostEqual(b[0]["start_s"], 0.97)  # took the whole word "hello"
-        self.assertEqual((b[0]["focus_x"], b[0]["zoom"]), (1.0, 1.8))
+        self.assertEqual((b[0]["focus_x"], b[0]["zoom"]), (1.0, 3.0))
+        self.assertEqual(b[0]["layout"], "single")      # stack needs both boxes
         self.assertEqual(b[1]["start_s"], 3.0)          # no overlap with beat 1
         self.assertAlmostEqual(b[1]["end_s"], 5.25)     # finished the word "yo"
         self.assertEqual(b[2]["end_s"], 12.0)           # inside the section
 
+    def test_stack_needs_two_boxes_and_ending_is_clamped(self):
+        plan = planner.tidy({"beats": [
+            {"start_s": 0, "end_s": 2, "layout": "stack", "top_box": [0, 0, 0.2, 0.3],
+             "bottom_box": [0.8, 0, 1.0, 0.3]},
+            {"start_s": 2, "end_s": 4, "layout": "stack", "top_box": [0, 0, 0.2, 0.3], "bottom_box": [1, 2]},
+        ], "ending": {"freeze_s": 9, "tint": "purple"}}, [], duration=10.0)
+        self.assertEqual([b["layout"] for b in plan["beats"]], ["stack", "single"])
+        self.assertEqual(plan["ending"]["freeze_s"], 3.5)
+        self.assertEqual(plan["ending"]["tint"], "none")
+
+    def test_schema_lists_the_library(self):
+        sch = planner.schema(["vine boom"], ["goofy"])
+        props = sch["properties"]
+        self.assertEqual(props["sounds"]["items"]["properties"]["name"]["enum"], ["vine boom"])
+        self.assertEqual(props["music"]["enum"], ["none", "goofy"])
+        self.assertIn("💀", props["stickers"]["items"]["properties"]["emoji"]["enum"])
+        empty = planner.schema([], [])
+        self.assertEqual(empty["properties"]["sounds"]["items"]["properties"]["name"]["enum"], ["none"])
+        self.assertIn("none available yet", planner.system_prompt([], []))
+
     def test_format_ranges(self):
         self.assertEqual(planner.format_ranges([1.0, 1.5, 2.0, 7.5]), "1.0-2.5, 7.5-8.0")
         self.assertEqual(planner.format_ranges([]), "(none stand out)")
+
+
+class CaptionCrossCheckTest(unittest.TestCase):
+    def test_youtube_words_win_where_the_two_disagree(self):
+        whisper = [[0.0, 0.3, "you're"], [0.3, 0.5, "my"], [0.5, 0.8, "food"], [0.8, 1.1, "bank,"],
+                   [2.0, 2.4, "I'm"], [2.4, 2.6, "not"], [2.6, 3.0, "playin'."]]
+        yt = [(0.0, "GIVE"), (0.3, "MY"), (0.5, "FOOD"), (0.8, "BACK."), (1.0, "[laughter]"),
+              (2.1, "I'M"), (2.4, "NOT"), (2.7, "PLAYING,")]
+        merged, diffs = captions.reconcile(whisper, captions.youtube_words(
+            [(100 + t, w) for t, w in yt], 100.0, 10.0))
+        self.assertEqual([w[2] for w in merged], ["GIVE", "my", "food", "BACK.", "I'm", "not", "PLAYING,"])
+        self.assertEqual(merged[0][:2], [0.0, 0.3])  # whisper's timing kept
+        self.assertEqual([(d[2], d[3]) for d in diffs], [("you're", "GIVE"), ("bank,", "BACK."),
+                                                         ("playin'.", "PLAYING,")])
+
+    def test_far_apart_words_are_not_swapped(self):
+        merged, diffs = captions.reconcile([[0.0, 0.3, "hello"]], [(9.0, "goodbye")])
+        self.assertEqual(merged, [[0.0, 0.3, "hello"]])
+        self.assertEqual(diffs, [])
+
+    def test_frames_thin_out_around_the_moment(self):
+        frames = [(i / 2, b"") for i in range(20)]  # 0.0 to 9.5 s, two a second
+        kept = [t for t, _ in clipper.thin_frames(frames, 3.0, 6.0)]
+        self.assertIn(3.5, kept)                     # inside: every frame
+        self.assertNotIn(1.5, kept)                  # outside: one a second
+        self.assertIn(1.0, kept)
+
+
+class LayoutTest(unittest.TestCase):
+    def test_box_window_covers_the_box_at_the_panel_shape(self):
+        w, h, x, y = render.box_window(1920, 1080, [0.0, 0.0, 0.12, 0.18], render.W / render.PANEL_H)
+        self.assertAlmostEqual(w / h, 1080 / 960, places=2)
+        self.assertLessEqual(x, 0.0 * 1920)
+        self.assertGreaterEqual(x + w, 0.12 * 1920)
+
+    def test_points_map_into_the_right_panel(self):
+        beat = render.build_timeline([{"start_s": 0, "end_s": 2, "layout": "stack",
+                                       "top_box": [0.0, 0.0, 0.2, 0.3], "bottom_box": [0.8, 0.0, 1.0, 0.3]}])[0]
+        _, y_top = render.map_point(beat, 0.1, 0.15, 1920, 1080)
+        _, y_bottom = render.map_point(beat, 0.9, 0.15, 1920, 1080)
+        self.assertLess(y_top, render.PANEL_H)
+        self.assertGreater(y_bottom, render.PANEL_H)
+
+    def test_stickers_land_inside_the_frame(self):
+        beats = render.build_timeline([{"start_s": 0, "end_s": 3, "focus_x": 0.5, "focus_y": 0.5, "zoom": 1}])
+        st = render.sticker_events([{"start_s": 1, "end_s": 2, "emoji": "💀", "x": 0.99, "y": 0.99,
+                                     "size": "large"}, {"start_s": 1, "end_s": 2, "emoji": "🦄",
+                                                        "x": 0.5, "y": 0.5, "size": "small"}], beats, 1920, 1080)
+        self.assertEqual(len(st), 1)                 # unknown emoji dropped
+        self.assertTrue(0 <= st[0].x <= render.W - st[0].size and 0 <= st[0].y <= render.H - st[0].size)
+
+
+class LibraryTest(unittest.TestCase):
+    def test_library_names_and_descriptions(self):
+        lib = Path(tempfile.mkdtemp())
+        (lib / "sounds").mkdir()
+        (lib / "sounds" / "vine boom.mp3").write_bytes(b"x")
+        (lib / "sounds" / "vine boom.txt").write_text("Deep boom: a stare.")
+        (lib / "sounds" / "._vine boom.mp3").write_bytes(b"x")  # Mac metadata file, ignored
+        old = config.LIBRARY_DIR
+        config.LIBRARY_DIR = lib
+        try:
+            self.assertEqual(sounds.choices(), ["vine boom"])
+            self.assertEqual(sounds.label("vine boom"), "vine boom (Deep boom: a stare.)")
+            self.assertEqual(sounds.music(), {})
+        finally:
+            config.LIBRARY_DIR = old
+
+    @unittest.skipUnless(Path(config.EMOJI_FONT).exists(), "emoji font not installed here")
+    def test_emoji_draws(self):
+        path = emoji.png("💀", 120, Path(tempfile.mkdtemp()))
+        self.assertTrue(path.exists() and path.stat().st_size > 500)
 
 
 class CommandTest(unittest.TestCase):
@@ -142,7 +235,7 @@ class CommandTest(unittest.TestCase):
         beats = render.build_timeline(BEATS)
         hits = [render.Hit(1.0, 1.15, "green")]
         cues = [render.Cue(2.0, "boom")]
-        cmd = render.ffmpeg_command(Path("/w/src.mp4"), beats, hits, cues, {"boom": Path("/w/boom.wav")},
+        cmd = render.ffmpeg_command(Path("/w/src.mp4"), beats, hits, cues, {"boom": (Path("/w/boom.wav"), 0.8)},
                                     Path("/w/captions.ass"), Path("/w/out.mp4"), 1920, 1080)
         self.assertEqual(cmd.count("-i"), 3)
         graph = cmd[cmd.index("-filter_complex") + 1]
@@ -150,8 +243,27 @@ class CommandTest(unittest.TestCase):
         self.assertIn("enable='between(t,1.000,1.150)'", graph)
         self.assertIn("ass=/w/captions.ass", graph)
         self.assertIn("adelay=delays=2000:all=1", graph)
+        self.assertIn("atrim=duration=1.500", graph)  # sound cut where the clip ends
         self.assertIn("amix=inputs=2", graph)
         self.assertEqual(cmd[-1], "/w/out.mp4")
+
+    def test_freeze_stickers_music_and_stack(self):
+        beats = render.build_timeline([{"start_s": 0, "end_s": 2, "layout": "stack",
+                                        "top_box": [0, 0, 0.2, 0.3], "bottom_box": [0.8, 0, 1, 0.3]},
+                                       {"start_s": 5, "end_s": 7}])
+        sticker = render.Sticker(4.0, 6.0, "💀", 420, 330, 610)
+        cmd = render.ffmpeg_command(Path("/w/src.mp4"), beats, [], [], {}, Path("/w/c.ass"), Path("/w/o.mp4"),
+                                    1920, 1080, [(sticker, Path("/w/e.png"))], freeze_s=2.0, tint="warm",
+                                    music=(Path("/w/m.mp3"), 0.2))
+        graph = cmd[cmd.index("-filter_complex") + 1]
+        self.assertIn("vstack=inputs=2", graph)
+        self.assertIn("tpad=stop_mode=clone:stop_duration=2.000", graph)
+        self.assertIn("enable='gte(t,4.000)'", graph)          # tint over the freeze
+        self.assertIn("overlay=x=330:y=610", graph)
+        self.assertIn("apad=whole_dur=6.000", graph)
+        self.assertIn("sidechaincompress", graph)
+        self.assertIn("-stream_loop", cmd)
+        self.assertEqual(cmd[cmd.index("-t", cmd.index("-filter_complex")) + 1], "6.000")
 
 
 if __name__ == "__main__":

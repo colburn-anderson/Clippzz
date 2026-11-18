@@ -4,7 +4,7 @@
 FROM python:3.13-slim-trixie
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg ca-certificates fonts-montserrat \
+ && apt-get install -y --no-install-recommends ffmpeg ca-certificates fonts-montserrat fonts-noto-color-emoji \
  && rm -rf /var/lib/apt/lists/*
 
 # yt-dlp needs a JavaScript runtime to read YouTube pages.

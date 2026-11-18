@@ -55,7 +55,7 @@
   <form class="row" method="post" action="/moments/{{ m.id }}/rate" style="margin-top:10px">
     <button class="good {{ 'on' if m.rating == 'good' }}" name="rating" value="good" type="submit">Funny</button>
     <button class="bad {{ 'on' if m.rating == 'bad' }}" name="rating" value="bad" type="submit">Not funny</button>
-    <input type="text" name="note" placeholder="Note (optional): what worked or did not" value="{{ m.note or '' }}">
+    <textarea name="note" rows="2" placeholder="Note (optional): what worked or did not">{{ m.note or '' }}</textarea>
   </form>
   {% set mclips = clips.get(m.id, []) %}
   {% for c in mclips %}
@@ -79,7 +79,7 @@
       <form class="row" method="post" action="/clips/{{ c.id }}/rate">
         <button class="good {{ 'on' if c.rating == 'good' }}" name="rating" value="good" type="submit">Post it</button>
         <button class="bad {{ 'on' if c.rating == 'bad' }}" name="rating" value="bad" type="submit">Not good enough</button>
-        <input type="text" name="note" placeholder="What to change (optional)" value="{{ c.note or '' }}">
+        <textarea name="note" rows="4" placeholder="What to change (optional)">{{ c.note or '' }}</textarea>
       </form>
     </div>
     {% else %}
@@ -115,6 +115,31 @@
 </div>
 {% endfor %}
 {% endif %}
+
+<script>
+// Keep a draft of every note in this browser while it is typed, so a note is
+// never lost if the Pi is restarting when it is sent. Cleared once saved.
+(function () {
+  let store = null;
+  try { store = window.localStorage; } catch (e) { return; }
+  document.querySelectorAll("form textarea[name=note]").forEach(function (box) {
+    const key = "clippzz-draft:" + box.form.getAttribute("action");
+    let draft = null;
+    try { draft = store.getItem(key); } catch (e) {}
+    if (draft !== null) {
+      if (box.value.trim() === draft.trim()) {
+        try { store.removeItem(key); } catch (e) {}
+      } else if (!box.value.trim()) {
+        box.value = draft;
+        box.insertAdjacentHTML("afterend", '<span class="small dim">Restored your unsent note.</span>');
+      }
+    }
+    box.addEventListener("input", function () {
+      try { store.setItem(key, box.value); } catch (e) {}
+    });
+  });
+})();
+</script>
 
 {% if clip_busy %}
 <script>

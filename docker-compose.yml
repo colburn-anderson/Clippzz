@@ -29,6 +29,11 @@ services:
   worker:
     <<: *common
     command: python -m clippzz.worker
+    volumes:
+      - ./:/app:ro
+      - /data:/data
+      # Meme sounds and music the owner drops in from the Mac (SSD share).
+      - /srv/storage/Clippzz:/library:ro
     env_file:
       - ${HOME}/.clippzz.env
     tmpfs:

@@ -2,16 +2,17 @@
 
 Every time in a plan is a section time: seconds from the start of the
 downloaded section. The renderer keeps only the beats, joins them with hard
-cuts, crops each beat to 9:16 around its focus point, then lays the speech
-captions, stage directions, colour hits and sound stings on the joined
-timeline (output time).
+cuts, crops each beat to 9:16 around its focus point (or stacks two crops),
+then lays the speech captions, stage directions, colour hits, emoji
+stickers, sound effects, music and an optional freeze-frame ending on the
+joined timeline (output time).
 """
 import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import sounds
+from . import emoji, sounds
 
 W, H, FPS = 1080, 1920, 30
 CAPTION_Y = 1130      # caption centre: a little below the middle, under the faces
@@ -37,6 +38,15 @@ HIT_MIX = {
     "white": "rr=1.25:rg=0.2:rb=0.2:gr=0.2:gg=1.25:gb=0.2:br=0.2:bg=0.2:bb=1.25",
     "bw": "rr=0.3:rg=0.59:rb=0.11:gr=0.3:gg=0.59:gb=0.11:br=0.3:bg=0.59:bb=0.11",
 }
+# Tints for the freeze-frame ending ("warm" is the classic sepia look).
+TINT_MIX = {
+    "warm": "rr=0.393:rg=0.769:rb=0.189:gr=0.349:gg=0.686:gb=0.168:br=0.272:bg=0.534:bb=0.131",
+    "bw": HIT_MIX["bw"],
+    "red": HIT_MIX["red"],
+}
+MUSIC_LEVEL = 0.2          # music bed, before it dips under speech
+SOUND_MAX_S = 4.0          # a sound effect never runs longer than this
+ENDING_EMOJI_POS = (W // 2, 820)
 
 SWEARS = {
     "fuck": "F*CK", "fucking": "F*CKING", "fucked": "F*CKED", "fucker": "F*CKER",
@@ -55,6 +65,9 @@ class Beat:
     focus_x: float = 0.5
     focus_y: float = 0.45
     zoom: float = 1.0
+    layout: str = "single"          # or "stack": top_box over bottom_box
+    top_box: list | None = None     # [left, top, right, bottom], 0 to 1
+    bottom_box: list | None = None
 
     @property
     def dur(self) -> float:
@@ -88,6 +101,16 @@ class Cue:
     name: str
 
 
+@dataclass
+class Sticker:
+    start: float
+    end: float
+    char: str
+    size: int
+    x: int  # top-left corner in the output frame
+    y: int
+
+
 # ---------- timeline ----------
 
 def build_timeline(beats: list[dict]) -> list[Beat]:
@@ -98,8 +121,10 @@ def build_timeline(beats: list[dict]) -> list[Beat]:
         dur = round((b["end_s"] - b["start_s"]) * FPS) / FPS
         if dur < 2 / FPS:
             continue
+        stack = b.get("layout") == "stack" and b.get("top_box") and b.get("bottom_box")
         out.append(Beat(b["start_s"], b["start_s"] + dur, round(t, 4),
-                        b.get("focus_x", 0.5), b.get("focus_y", 0.45), b.get("zoom", 1.0)))
+                        b.get("focus_x", 0.5), b.get("focus_y", 0.45), b.get("zoom", 1.0),
+                        "stack" if stack else "single", b.get("top_box"), b.get("bottom_box")))
         t += dur
     return out
 
@@ -342,10 +367,10 @@ def hit_events(hits: list[dict], beats: list[Beat]) -> list[Hit]:
     return out
 
 
-def sound_cues(cues: list[dict], beats: list[Beat]) -> list[Cue]:
+def sound_cues(cues: list[dict], beats: list[Beat], names) -> list[Cue]:
     out = []
     for c in sorted(cues, key=lambda c: c["at_s"]):
-        if c.get("name") not in sounds.SOUNDS:
+        if c.get("name") not in names:
             continue
         t = to_out(c["at_s"], beats, snap="next")
         if t is not None and t < total(beats) - 0.1:
@@ -353,7 +378,7 @@ def sound_cues(cues: list[dict], beats: list[Beat]) -> list[Cue]:
     return out
 
 
-# ---------- ffmpeg ----------
+# ---------- framing and stickers ----------
 
 def _even(v: float) -> int:
     return max(2, int(v) // 2 * 2)
@@ -361,7 +386,7 @@ def _even(v: float) -> int:
 
 def crop_box(src_w: int, src_h: int, fx: float, fy: float, zoom: float) -> tuple[int, int, int, int]:
     """A 9:16 window inside the source, centred on the focus point where possible."""
-    zoom = min(max(zoom, 1.0), 2.0)
+    zoom = min(max(zoom, 1.0), 3.0)
     if src_w / src_h > W / H:
         ch = src_h / zoom
         cw = ch * W / H
@@ -374,50 +399,176 @@ def crop_box(src_w: int, src_h: int, fx: float, fy: float, zoom: float) -> tuple
     return cw, ch, int(x), int(y)
 
 
+def box_window(src_w: int, src_h: int, box, aspect: float) -> tuple[int, int, int, int]:
+    """The smallest window of the given width/height ratio that covers a box
+    ([left, top, right, bottom], 0 to 1) with a little margin."""
+    l, t, r, b = box
+    bw, bh = (r - l) * src_w, (b - t) * src_h
+    w = max(bw, bh * aspect) * 1.08
+    h = w / aspect
+    if h > src_h:
+        h, w = src_h, src_h * aspect
+    if w > src_w:
+        w, h = src_w, src_w / aspect
+    w, h = _even(w), _even(h)
+    x = min(max((l + r) / 2 * src_w - w / 2, 0), src_w - w)
+    y = min(max((t + b) / 2 * src_h - h / 2, 0), src_h - h)
+    return w, h, int(x), int(y)
+
+
+PANEL_H = H // 2
+
+
+def panels(beat: Beat, src_w: int, src_h: int) -> list[tuple[tuple[int, int, int, int], int, int]]:
+    """(crop window, output y, output height) for each picture in the beat."""
+    if beat.layout == "stack":
+        return [(box_window(src_w, src_h, beat.top_box, W / PANEL_H), 0, PANEL_H),
+                (box_window(src_w, src_h, beat.bottom_box, W / PANEL_H), PANEL_H, PANEL_H)]
+    return [(crop_box(src_w, src_h, beat.focus_x, beat.focus_y, beat.zoom), 0, H)]
+
+
+def map_point(beat: Beat, x: float, y: float, src_w: int, src_h: int) -> tuple[int, int]:
+    """A point on the source frame (0 to 1) -> pixel in the output frame."""
+    sx, sy = x * src_w, y * src_h
+    options = panels(beat, src_w, src_h)
+    for (cw, ch, cx, cy), oy, oh in options:
+        if cx <= sx <= cx + cw and cy <= sy <= cy + ch:
+            return int((sx - cx) / cw * W), int(oy + (sy - cy) / ch * oh)
+    (cw, ch, cx, cy), oy, oh = options[0]  # outside the crop: keep it on screen
+    return (int(min(max((sx - cx) / cw, 0.1), 0.9) * W),
+            int(oy + min(max((sy - cy) / ch, 0.1), 0.9) * oh))
+
+
+def sticker_events(stickers: list[dict], beats: list[Beat], src_w: int, src_h: int) -> list[Sticker]:
+    out = []
+    for st in sorted(stickers, key=lambda s: s["start_s"]):
+        if st.get("emoji") not in emoji.CHOICES:
+            continue
+        start = to_out(st["start_s"], beats, snap="next")
+        if start is None:
+            continue
+        end = to_out(st["end_s"], beats, snap="prev")
+        if end is None or end - start < 0.5:
+            end = start + 1.2
+        end = min(end, total(beats))
+        bi = beat_at(st["start_s"], beats)
+        beat = beats[bi] if bi is not None else beats[min(range(len(beats)), key=lambda i: abs(beats[i].out_s - start))]
+        size = emoji.SIZES.get(st.get("size"), emoji.SIZES["medium"])
+        px, py = map_point(beat, float(st.get("x", 0.5)), float(st.get("y", 0.5)), src_w, src_h)
+        x = min(max(px - size // 2, 0), W - size)
+        y = min(max(py - size // 2, 0), H - size)
+        out.append(Sticker(round(start, 3), round(end, 3), st["emoji"], size, x, y))
+    return out
+
+
+# ---------- ffmpeg ----------
+
+AUDIO_FMT = "aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo"
+
+
 def ffmpeg_command(src: Path, beats: list[Beat], hits: list[Hit], cues: list[Cue],
-                   sound_files: dict[str, Path], ass_path: Path, out_path: Path,
-                   src_w: int, src_h: int) -> list[str]:
+                   sound_files: dict[str, tuple[Path, float]], ass_path: Path, out_path: Path,
+                   src_w: int, src_h: int, stickers: list[tuple[Sticker, Path]] = (),
+                   freeze_s: float = 0.0, tint: str = "none",
+                   music: tuple[Path, float] | None = None) -> list[str]:
+    """sound_files: name -> (file, mix volume); stickers: (sticker, png);
+    music: (file, volume) or None."""
     cmd = ["ffmpeg", "-v", "error", "-y"]
+    end_beats = total(beats)
+    end_all = end_beats + freeze_s
     for b in beats:
         cmd += ["-ss", f"{b.src_s:.3f}", "-t", f"{b.dur + 0.1:.3f}", "-i", str(src)]
+    n = len(beats)
     for c in cues:
-        cmd += ["-i", str(sound_files[c.name])]
+        cmd += ["-i", str(sound_files[c.name][0])]
+    sticker_base = n + len(cues)
+    for _, png in stickers:
+        cmd += ["-loop", "1", "-framerate", str(FPS), "-t", f"{end_all:.3f}", "-i", str(png)]
+    music_input = sticker_base + len(stickers)
+    if music:
+        cmd += ["-stream_loop", "-1", "-i", str(music[0])]
 
     graph = []
-    audio_fmt = "aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo"
     for i, b in enumerate(beats):
-        cw, ch, x, y = crop_box(src_w, src_h, b.focus_x, b.focus_y, b.zoom)
-        graph.append(f"[{i}:v]trim=duration={b.dur:.4f},setpts=PTS-STARTPTS,"
-                     f"crop={cw}:{ch}:{x}:{y},scale={W}:{H}:flags=bicubic,setsar=1,"
-                     f"fps={FPS},format=yuv420p[v{i}]")
-        graph.append(f"[{i}:a]{audio_fmt},atrim=duration={b.dur:.4f},asetpts=PTS-STARTPTS,"
+        trim = f"[{i}:v]trim=duration={b.dur:.4f},setpts=PTS-STARTPTS"
+        if b.layout == "stack":
+            (tw, th, tx, ty), _, _ = panels(b, src_w, src_h)[0]
+            (bw, bh, bx, by), _, _ = panels(b, src_w, src_h)[1]
+            graph.append(f"{trim},split=2[pt{i}][pb{i}]")
+            graph.append(f"[pt{i}]crop={tw}:{th}:{tx}:{ty},scale={W}:{PANEL_H}:flags=bicubic[qt{i}]")
+            graph.append(f"[pb{i}]crop={bw}:{bh}:{bx}:{by},scale={W}:{PANEL_H}:flags=bicubic[qb{i}]")
+            graph.append(f"[qt{i}][qb{i}]vstack=inputs=2,setsar=1,fps={FPS},format=yuv420p[v{i}]")
+        else:
+            cw, ch, x, y = crop_box(src_w, src_h, b.focus_x, b.focus_y, b.zoom)
+            graph.append(f"{trim},crop={cw}:{ch}:{x}:{y},scale={W}:{H}:flags=bicubic,setsar=1,"
+                         f"fps={FPS},format=yuv420p[v{i}]")
+        graph.append(f"[{i}:a]{AUDIO_FMT},atrim=duration={b.dur:.4f},asetpts=PTS-STARTPTS,"
                      f"apad=whole_dur={b.dur:.4f},afade=t=in:d=0.01,"
                      f"afade=t=out:st={max(b.dur - 0.02, 0):.4f}:d=0.02[a{i}]")
-    n = len(beats)
     graph.append("".join(f"[v{i}][a{i}]" for i in range(n)) + f"concat=n={n}:v=1:a=1[vc][ac]")
 
-    video = [f"colorchannelmixer={HIT_MIX[h.kind]}:enable='between(t,{h.start:.3f},{h.end:.3f})'"
-             for h in hits]
-    video += [f"ass={ass_path}", "format=yuv420p"]
-    graph.append("[vc]" + ",".join(video) + "[vout]")
+    # Video: freeze the last frame, colour hits and the ending tint, stickers, captions.
+    looks = []
+    if freeze_s > 0:
+        looks.append(f"tpad=stop_mode=clone:stop_duration={freeze_s:.3f}")
+    looks += [f"colorchannelmixer={HIT_MIX[h.kind]}:enable='between(t,{h.start:.3f},{h.end:.3f})'"
+              for h in hits]
+    if freeze_s > 0 and tint in TINT_MIX:
+        looks.append(f"colorchannelmixer={TINT_MIX[tint]}:enable='gte(t,{end_beats:.3f})'")
+    cur = "[vc]"
+    if looks:
+        graph.append(f"[vc]{','.join(looks)}[vl]")
+        cur = "[vl]"
+    for j, (st, _) in enumerate(stickers):
+        fade_out = max(st.end - 0.12, st.start)
+        graph.append(f"[{sticker_base + j}:v]format=rgba,fade=t=in:st={st.start:.3f}:d=0.12:alpha=1,"
+                     f"fade=t=out:st={fade_out:.3f}:d=0.12:alpha=1[e{j}]")
+        graph.append(f"{cur}[e{j}]overlay=x={st.x}:y={st.y}:"
+                     f"enable='between(t,{st.start:.3f},{st.end:.3f})'[o{j}]")
+        cur = f"[o{j}]"
+    graph.append(f"{cur}ass={ass_path},format=yuv420p[vout]")
 
-    mix = ["[ac]"]
+    # Audio: stream audio (silent through the freeze), music that dips under
+    # it, and the sound effects on top.
+    voice = "[ac]"
+    if freeze_s > 0:
+        graph.append(f"[ac]apad=whole_dur={end_all:.3f}[acp]")
+        voice = "[acp]"
+    mix = []
+    if music:
+        graph.append(f"{voice}asplit=2[vx][vk]")
+        graph.append(f"[{music_input}:a]{AUDIO_FMT},atrim=duration={end_all:.3f},asetpts=PTS-STARTPTS,"
+                     f"afade=t=in:d=0.6,afade=t=out:st={max(end_all - 1.5, 0):.3f}:d=1.5,"
+                     f"volume={music[1]:.3f}[mus]")
+        graph.append("[mus][vk]sidechaincompress=threshold=0.025:ratio=10:attack=10:release=400[musd]")
+        mix += ["[vx]", "[musd]"]
+    else:
+        mix.append(voice)
     for j, c in enumerate(cues):
         ms = int(round(c.at * 1000))
-        graph.append(f"[{n + j}:a]{audio_fmt},volume={sounds.volume(c.name):.2f},"
-                     f"adelay=delays={ms}:all=1[s{j}]")
+        # Long files (a theme song sting) play their first few seconds, faded out.
+        cap = max(min(SOUND_MAX_S, end_all - c.at), 0.3)
+        graph.append(f"[{n + j}:a]{AUDIO_FMT},atrim=duration={cap:.3f},"
+                     f"afade=t=out:st={max(cap - 0.3, 0):.3f}:d=0.3,"
+                     f"volume={sound_files[c.name][1]:.3f},adelay=delays={ms}:all=1[s{j}]")
         mix.append(f"[s{j}]")
-    if cues:
+    if len(mix) > 1:
         graph.append("".join(mix) + f"amix=inputs={len(mix)}:normalize=0:duration=first:"
                      "dropout_transition=0[am]")
+        final = "[am]"
+    else:
+        final = mix[0]
     # Loud like the reference Shorts, with a ceiling so nothing clips.
-    graph.append(f"{'[am]' if cues else '[ac]'}loudnorm=I=-11:TP=-1.0:LRA=11,aresample=48000[aout]")
+    graph.append(f"{final}loudnorm=I=-11:TP=-1.0:LRA=11,aresample=48000[aout]")
 
     cmd += ["-filter_complex", ";".join(graph), "-map", "[vout]", "-map", "[aout]",
+            "-t", f"{end_all:.3f}",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-pix_fmt", "yuv420p",
             "-r", str(FPS), "-g", str(FPS * 2), "-c:a", "aac", "-b:a", "160k",
             "-movflags", "+faststart", str(out_path)]
     return cmd
+
+
 
 
 def render(src: Path, plan: dict, words, out_path: Path, src_w: int, src_h: int,
@@ -431,15 +582,39 @@ def render(src: Path, plan: dict, words, out_path: Path, src_w: int, src_h: int,
     stage = stage_events(plan.get("stage_directions", []), beats)
     events = place(speech, stage)
     hits = hit_events(plan.get("hits", []), beats)
-    cues = sound_cues(plan.get("sounds", []), beats)
-
+    names = set(sounds.choices())
+    cues = sound_cues(plan.get("sounds", []), beats, names)
     work = out_path.parent
+    stickers = sticker_events(plan.get("stickers", []), beats, src_w, src_h)
+
+    ending = plan.get("ending") or {}
+    freeze = float(ending.get("freeze_s") or 0)
+    end_beats = total(beats)
+    if freeze > 0:
+        if ending.get("emoji") in emoji.CHOICES:
+            size = emoji.SIZES["large"]
+            stickers.append(Sticker(round(end_beats, 3), round(end_beats + freeze, 3), ending["emoji"], size,
+                                    ENDING_EMOJI_POS[0] - size // 2, ENDING_EMOJI_POS[1] - size // 2))
+        if ending.get("sound") in names:
+            cues.append(Cue(round(end_beats, 3), ending["sound"]))
+
     ass_path = work / "captions.ass"
     ass_path.write_text(ass_document(events), encoding="utf-8")
     files = sounds.ensure([c.name for c in cues], work / "sounds")
-    cmd = ffmpeg_command(src, beats, hits, cues, files, ass_path, out_path, src_w, src_h)
+    sound_files = {name: (path, sounds.volume(name, path)) for name, path in files.items()}
+    sticker_pngs = [(st, emoji.png(st.char, st.size, work / "emoji")) for st in stickers]
+
+    music, credit = None, ""
+    track = sounds.music().get(plan.get("music") or "")
+    if track:
+        music = (track, round(MUSIC_LEVEL * sounds.volume("music", track) / 10 ** (-4 / 20), 3))
+        credit = sounds.note(track)
+
+    cmd = ffmpeg_command(src, beats, hits, cues, sound_files, ass_path, out_path, src_w, src_h,
+                         sticker_pngs, freeze, ending.get("tint", "none"), music)
     r = subprocess.run(cmd, capture_output=True, timeout=timeout)
     if r.returncode != 0 or not out_path.exists():
         raise RuntimeError("render failed: " + r.stderr.decode(errors="replace")[-600:])
-    return {"duration_s": round(total(beats), 2), "beats": len(beats), "captions": len(speech),
-            "stage": len(stage), "hits": len(hits), "sounds": len(cues)}
+    return {"duration_s": round(end_beats + freeze, 2), "beats": len(beats), "captions": len(speech),
+            "stage": len(stage), "hits": len(hits), "sounds": len(cues), "stickers": len(stickers),
+            "music": plan.get("music") if track else None, "music_credit": credit}

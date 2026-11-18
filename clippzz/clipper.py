@@ -18,7 +18,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from . import config, db, planner, render, sources, transcribe
+from . import captions, config, db, planner, render, sounds, sources, transcribe
 
 log = logging.getLogger("clippzz.clipper")
 
@@ -97,13 +97,32 @@ def extract_frames(src: Path, wd: Path, v_off: float, fps: int = 2, width: int =
     return frames
 
 
-def youtube_lines(vid: str, start_s: float, duration: float) -> list[tuple[float, str]]:
-    """YouTube's auto-caption lines for the section, in section time."""
+def youtube_words(vid: str, start_s: float, duration: float) -> list[tuple[float, str]]:
+    """YouTube's auto-caption words for the section, in section time."""
     saved = config.SOURCES_DIR / vid / "transcript.json.gz"
     if not saved.exists():
         return []
-    lines = json.loads(gzip.decompress(saved.read_bytes())).get("lines", [])
-    return [(round(t - start_s, 1), text) for t, text in lines if start_s - 2 <= t <= start_s + duration]
+    words = json.loads(gzip.decompress(saved.read_bytes())).get("words", [])
+    return captions.youtube_words(words, start_s, duration)
+
+
+def owner_notes(conn, moment_id: int, limit: int = 8) -> list[str]:
+    """The owner's notes on this moment and on recent clips, newest first."""
+    notes = []
+    row = conn.execute("SELECT note FROM moments WHERE id=? AND note IS NOT NULL", (moment_id,)).fetchone()
+    if row:
+        notes.append(f"On this moment: {row['note']}")
+    for r in conn.execute(
+            "SELECT c.title, c.rating, c.note FROM clips c WHERE c.note IS NOT NULL"
+            " ORDER BY c.rated_at DESC LIMIT ?", (limit,)):
+        verdict = {"good": "rated post it", "bad": "rated not good enough"}.get(r["rating"], "not rated")
+        notes.append(f"On the clip \"{r['title']}\" ({verdict}): {r['note']}")
+    return notes
+
+
+def thin_frames(frames, keep_from: float, keep_to: float):
+    """Every frame inside the moment, every other frame (one a second) outside it."""
+    return [f for i, f in enumerate(frames) if keep_from <= f[0] <= keep_to or i % 2 == 0]
 
 
 def _top(levels: list[float], fraction: float) -> float:
@@ -134,8 +153,8 @@ def make(conn, clip_id: int, keep: bool = False, rerender: bool = False) -> dict
             start = clip["section_start_s"]
         else:
             # YouTube stream recordings have a keyframe every 2 seconds.
-            start = max(0.0, math.floor((m["start_s"] - config.CLIP_PAD_S) / 2) * 2)
-        end = m["end_s"] + config.CLIP_PAD_S
+            start = max(0.0, math.floor((m["start_s"] - config.CLIP_PAD_BEFORE_S) / 2) * 2)
+        end = m["end_s"] + config.CLIP_PAD_AFTER_S
         src = wd / "src.mp4"
         if not src.exists():
             step("Downloading the moment in HD", section_start_s=start)
@@ -154,19 +173,26 @@ def make(conn, clip_id: int, keep: bool = False, rerender: bool = False) -> dict
             plan, words = json.loads(clip["plan"]), json.loads(clip["words"])
         else:
             step("Writing captions from the audio")
-            prompt = f"{vod['channel'] or ''}. {vod['title'] or ''}."
-            words = [[ws + info["a_off"], we + info["a_off"], w]
-                     for ws, we, w in transcribe.words(wav, prompt)]
+            # The reviewer's notes name people and quote the key lines, which
+            # steers speech-to-text towards the right words.
+            prompt = f"{vod['channel'] or ''}. {m['title'] or ''}. {m['joke'] or ''}"
+            heard = [[ws + info["a_off"], we + info["a_off"], w]
+                     for ws, we, w in transcribe.words(wav, prompt[:600])]
+            words, diffs = captions.reconcile(heard, youtube_words(vod["id"], start, info["duration"]))
+            log.info("clip %s: %d words, %d places where YouTube's captions disagreed",
+                     clip_id, len(words), len(diffs))
             db.set_clip(conn, clip_id, "working", "Looking at the frames", words=json.dumps(words))
-            frames = extract_frames(src, wd, info["v_off"])
+            span = (m["start_s"] - start, m["end_s"] - start)
+            frames = thin_frames(extract_frames(src, wd, info["v_off"]), span[0] - 1, span[1] + 1)
             loud_cut = _top(levels, 0.15)
             loud_times = [round(info["a_off"] + i * 0.5, 1) for i, v in enumerate(levels) if v >= loud_cut]
             db.check_budget(conn)
             step(f"Planning the edit from {len(frames)} frames")
             meta = {"channel": vod["channel"], "title": vod["title"]}
-            plan, tin, tout = planner.plan_clip(meta, dict(m), frames, words, loud_times,
-                                                info["duration"], info["width"], info["height"],
-                                                yt_lines=youtube_lines(vod["id"], start, info["duration"]))
+            plan, tin, tout = planner.plan_clip(
+                meta, dict(m), frames, words, loud_times, info["duration"], info["width"], info["height"],
+                moment_span=span, disagreements=diffs, owner_notes=owner_notes(conn, m["id"]),
+                sound_names=sounds.choices(), music_names=list(sounds.music()))
             cost = db.record_usage(conn, vod["id"], "plan", config.PLANNER_MODEL, tin, tout)
             plan = planner.tidy(plan, words, info["duration"])
             db.set_clip(conn, clip_id, "working", "Rendering", plan=json.dumps(plan),
@@ -181,10 +207,13 @@ def make(conn, clip_id: int, keep: bool = False, rerender: bool = False) -> dict
         final = config.CLIPS_DIR / f"{clip_id}.mp4"
         shutil.move(str(out), final)
         stats["seconds"] = round(time.time() - t0)
-        db.set_clip(conn, clip_id, "done",
-                    f"{stats['duration_s']:.1f} s, {stats['beats']} beats, "
-                    f"made in {stats['seconds'] // 60} min {stats['seconds'] % 60} s",
-                    path=str(final), duration_s=stats["duration_s"])
+        detail = (f"{stats['duration_s']:.1f} s, {stats['beats']} beats, "
+                  f"made in {stats['seconds'] // 60} min {stats['seconds'] % 60} s")
+        if stats.get("music_credit"):
+            detail += f". Music credit for the description: {stats['music_credit']}"
+        elif stats.get("music"):
+            detail += f". Music: {stats['music']}"
+        db.set_clip(conn, clip_id, "done", detail, path=str(final), duration_s=stats["duration_s"])
         log.info("clip %s: done %s", clip_id, stats)
         return stats
     finally:

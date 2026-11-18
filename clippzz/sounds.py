@@ -1,12 +1,25 @@
-"""The sound-sting library. Every sound is synthesised by ffmpeg from a
-formula, so there is nothing to license and nothing stored on disk: the
-files are made in RAM scratch space when a clip is rendered.
+"""Sound stings and background music.
 
-These are stand-ins until the user names the meme sounds they want by ear."""
+The real library lives on the SSD network drive, in Clippzz/sounds and
+Clippzz/music, so the owner can drop files in from the Mac. A file's name is
+what the planner sees and picks from ("vine boom.mp3" -> "vine boom"), so name
+each file after the meme. Inside the containers the folder is /library.
+
+A text file next to a sound with the same name ("vine boom.txt") says what
+it is for; the planner reads it. Next to a music track it holds the credit
+line the track's licence asks for.
+
+Stand-ins: a few synthesised stings exist for an empty folder, switched off
+by default because the owner found them unfunny.
+"""
+import re
 import subprocess
+from functools import lru_cache
 from pathlib import Path
 
 from . import config
+
+AUDIO_EXT = (".mp3", ".wav", ".m4a", ".ogg", ".aac", ".flac", ".opus")
 
 
 def _note(freq: float, dur: float, wobble: bool = False) -> str:
@@ -17,7 +30,7 @@ def _note(freq: float, dur: float, wobble: bool = False) -> str:
 
 
 # name -> (filtergraph ending in [out], what it is for, mix volume)
-SOUNDS = {
+SYNTH = {
     "boom": (
         "aevalsrc=exprs='0.95*sin(2*PI*(58*t-16*t*t))*exp(-3.2*t)"
         "+0.35*sin(2*PI*116*t)*exp(-9*t)+0.25*(2*random(0)-1)*exp(-30*t)':s=44100:d=1.1[out]",
@@ -40,27 +53,78 @@ SOUNDS = {
         "loss or defeat (sad trombone)", 0.6),
 }
 
-NAMES = list(SOUNDS)
+
+def _folder(kind: str) -> dict[str, Path]:
+    try:
+        files = sorted(p for p in (config.LIBRARY_DIR / kind).iterdir()
+                       if p.is_file() and p.suffix.lower() in AUDIO_EXT and not p.name.startswith("."))
+    except OSError:
+        return {}
+    return {re.sub(r"\s+", " ", p.stem).strip(): p for p in files}
 
 
-def describe() -> str:
-    return "; ".join(f"{name} ({SOUNDS[name][1]})" for name in NAMES)
+def library() -> dict[str, Path]:
+    """The owner's meme sounds, by name."""
+    return _folder("sounds")
 
 
-def volume(name: str) -> float:
-    return SOUNDS[name][2]
+def music() -> dict[str, Path]:
+    """The owner's background tracks, by name."""
+    return _folder("music")
+
+
+def choices() -> list[str]:
+    """Sound names the planner may use: the owner's library, else (if switched
+    on) the synthesised stand-ins, else none."""
+    return list(library()) or (list(SYNTH) if config.SYNTH_SOUNDS else [])
+
+
+def note(path: Path) -> str:
+    """The text file saved next to a sound or track, if any."""
+    try:
+        return path.with_suffix(".txt").read_text(encoding="utf-8").strip()[:300]
+    except OSError:
+        return ""
+
+
+def label(name: str) -> str:
+    """"vine boom (Deep boom: a stare, a reveal...)" for the planner."""
+    path = library().get(name)
+    text = note(path) if path else SYNTH.get(name, ("", ""))[1]
+    return f"{name} ({text})" if text else name
+
+
+@lru_cache(maxsize=256)
+def _peak_db(path: str) -> float:
+    r = subprocess.run(["ffmpeg", "-v", "info", "-nostats", "-i", path, "-af", "volumedetect",
+                        "-f", "null", "-"], capture_output=True, timeout=60)
+    m = re.search(r"max_volume: (-?[\d.]+) dB", r.stderr.decode(errors="replace"))
+    return float(m.group(1)) if m else 0.0
+
+
+def volume(name: str, path: Path | None = None) -> float:
+    """Mix level: stand-ins have fixed levels; library files are evened out
+    so each one peaks around -4 dBFS, whatever level it was saved at."""
+    if path is None or path.name.startswith("synth-"):
+        return SYNTH[name][2]
+    gain_db = min(max(-4.0 - _peak_db(str(path)), -20.0), 12.0)
+    return round(10 ** (gain_db / 20), 3)
 
 
 def ensure(names, folder: Path | None = None) -> dict[str, Path]:
-    """Makes the WAV for each name (once per folder) and returns their paths."""
+    """A file for each name: the library file, or a stand-in made once per folder."""
+    lib = library()
     folder = folder or (config.WORK_DIR / "sounds")
-    folder.mkdir(parents=True, exist_ok=True)
     paths = {}
     for name in set(names):
-        path = folder / f"{name}.wav"
+        if name in lib:
+            paths[name] = lib[name]
+            continue
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / f"synth-{name}.wav"
         if not path.exists():
             r = subprocess.run(
-                ["ffmpeg", "-v", "error", "-y", "-filter_complex", SOUNDS[name][0],
+                ["ffmpeg", "-v", "error", "-y", "-filter_complex", SYNTH[name][0],
                  "-map", "[out]", "-ac", "1", "-ar", "44100", str(path)],
                 capture_output=True, timeout=60)
             if r.returncode != 0:

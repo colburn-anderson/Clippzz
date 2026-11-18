@@ -18,7 +18,7 @@ h1 { font-size: 1.4rem; margin: 8px 0 4px; } h2 { font-size: 1.1rem; margin: 28p
 .dim { color: var(--dim); } .small { font-size: .875rem; }
 .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin:12px 0; }
 .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-input[type=url], input[type=text] { flex:1 1 220px; min-width:0; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); font:inherit; }
+input[type=url], input[type=text], textarea { flex:1 1 220px; min-width:0; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); font:inherit; }
 button { padding:10px 14px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); font:inherit; font-weight:600; cursor:pointer; }
 button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
 button.good.on { background:var(--good); border-color:var(--good); color:#fff; }
@@ -38,6 +38,7 @@ button[disabled] { opacity:.5; cursor:default; }
 video.vertical { width:min(100%, 300px); aspect-ratio:9/16; background:#000; border-radius:10px; }
 .clipinfo { flex:1 1 260px; min-width:0; }
 .clipinfo form { margin-top:10px; }
+textarea { resize:vertical; min-height:2.6em; line-height:1.4; }
 </style>
 </head>
 <body>
