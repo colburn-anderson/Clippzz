@@ -1,11 +1,11 @@
 {# A finished clip: video, post text, plan and rating. Used on the home page and the VOD page. #}
 {% macro clip_card(c, vod, m_start, show_posted=True) %}
 <div class="clip" id="c{{ c.id }}" data-state="{{ c.state }}">
-  <video class="vertical" controls playsinline preload="metadata" src="/clips/{{ c.id }}.mp4#t=0.5"></video>
+  <video class="vertical" controls playsinline preload="metadata" src="/clips/{{ c.id }}.mp4?v={{ c.updated_at|int }}#t=0.5"></video>
   <div class="clipinfo">
     <strong>{{ c.title }}</strong>
     <div class="small dim">Clip {{ c.id }} · {{ (c.detail or "").split(". Music")[0] }}{% if c.cost_usd %} · ${{ "%.2f"|format(c.cost_usd) }}{% endif %}
-      · <a href="/clips/{{ c.id }}.mp4" download>Download</a>{% if vod %} · <a href="/vod/{{ vod.id }}#m{{ c.moment_id }}">from {{ vod.title or vod.id }}</a>{% endif %}</div>
+      · <a href="/clips/{{ c.id }}.mp4?v={{ c.updated_at|int }}" download>Download</a>{% if vod %} · <a href="/vod/{{ vod.id }}#m{{ c.moment_id }}">from {{ vod.title or vod.id }}</a>{% endif %}</div>
     {% if c.posted_at %}<div class="small"><span class="chip done">Posted {{ c.posted_at|ago }}</span></div>{% endif %}
     {% set post = post_parts(c, vod, m_start) %}
     {% set plan_ = c.plan|fromjsonobj %}
