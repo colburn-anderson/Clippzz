@@ -51,15 +51,41 @@ All 18 Shorts over 1 million views are 12 to 26 seconds long, and recent ones ru
 
 ### Rules for the edit planner (this format)
 
-1. Pick one bit that works muted. Raw window 15 to 90 seconds; final clip 12 to 25 seconds.
+1. Pick one bit. Open with its spoken setup line if there is one; end on how it resolves. Final clip 12 to 28 seconds.
 2. From frames (2 a second) and word timings, choose the keep-spans: the shortest set of beats that still tells the bit from setup to payoff. Each span is 0.5 to 3 seconds. Cut every pause and every line the viewer doesn't need.
 3. Write a stage-direction caption for every beat that has no speech, in the creator's world and in meme slang, short (one to three words) and in asterisks. They should be funny on their own.
 4. Caption all kept speech, one or two words at a time, timed to the word, colour changing by phrase. Use a proper transcription (whisper), not YouTube's auto-captions.
 5. Add a colour hit or a punch-in on every punch word and reaction, about one every 2 seconds. Use black and white for a loss or a fail.
-6. Use a short sound sting on hits only from the tagged library. Never cover the dialogue.
+6. Sound effects come from the owner's library only: at least one per clip, several where they fit, never over an important line. Music from the library runs quietly underneath and dips under speech.
 7. Crop to fill 1080×1920 on the people. No blurred bars.
-8. Meme cutaways (user, November 18, 2026) are allowed, but none of the five uses one, so add one only where it clearly makes the bit funnier.
+8. Emoji stickers (💀, 😭, 🤭) may sit on the joke; a freeze-frame ending with a tint and a big emoji may hold a final punchline. When two people react on two cameras, stack the two crops. Meme video cutaways are allowed but none of the examples uses one.
 9. Title in the channel's pattern, and credit the creator in the description.
+
+## More examples from the owner (studied November 18, 2026)
+
+| Short | Channel | Views | Length | What it adds |
+| --- | --- | --- | --- | --- |
+| ["Even he was shocked 😂😂"](https://youtube.com/shorts/B4Xh4PzRtJM) | deagzzzshorts (6.97 M subscribers) | 53.4 M | 18.8 s, 3:4 frame | A typed hook title at the start ("ISHOWSPEED PROVES HE'S STRONG"); glowing coloured keywords ("THROW IT", "BREAK IT?"); `*CONFUSED*` on a white bloom flash; ends on a freeze frame with a warm sepia tint and a big 💀 held about 3 s |
+| ["I HOPE RONALDO NEVER SEES THIS SPEED CLIP! 😭"](https://youtube.com/shorts/1xmtOKHRNAQ) | SpeedKaiClip (1.25 M) | 870 K | 22.5 s | Captions a phrase at a time with one coloured keyword; background music under the build-up; emoji stickers on the joke (a crying 💀 where Speed touches the statue blindfolded, 🤭 covering him at the end); white-flash and blur transitions |
+| ["Speed tried to get KaiCenat permanently banned🤣"](https://youtube.com/shorts/HVTfgCwX5zY) | SpeedKaiClip | 117.5 M | 49 s | Two cameras stacked (Kai above, Speed below) and full-width screen recordings; one-word captions; stage directions `*SPAM CHAT*`, `*SEARCH*`, `*TEXT TO VOICE*`, `*LAUGH*`; a cut every 1.5 s; mastered very loud (−6.8 LUFS); the owner's model for sound effects |
+
+What all the examples share: one bit; hard cuts every 1.5 to 2.5 s with no pauses; big outlined captions one or two words at a time, coloured by phrase or keyword; stage directions in asterisks; colour or white flashes on hits; meme sound effects; a loud master.
+
+## The owner's feedback on the first clips (November 18, 2026)
+
+On the "Speed steals Kai's plate" test clips:
+
+- **Keep the spoken setup.** The version that opened with Speed saying "Kai, I'm 'bout to run all the way to your room to take a bite" beat the version that opened on the action with a stage direction, even though the setup is on a facecam over gameplay.
+- **Show how it ends.** "As a viewer I want to see how it ends, like if Speed keeps eating more food or if Kai steals it back." Clips get 75 s of footage after the moment, and the plan must end on the resolution.
+- **Background music** under the clip.
+- **Classic streamer sound effects, not synthesised stings.** "The sound effects are not funny or popular, they kind of take away from the action." The owner picked them (below). Use at least one per clip, and several where they fit; they are short and spammed in this kind of video. The timing of the stings was fine.
+- **Accurate captions.** "A couple of them or a small one is fine but they really should be more accurate." Speech-to-text is now cross-checked against YouTube's captions, and Claude settles the disagreements.
+
+### Sound library (Clippzz/sounds on the SSD share)
+
+Picked by the owner from Myinstants on November 18, 2026; each file has a `.txt` next to it saying when to use it: vine boom, fortnite death, faaah, rizz, dexter meme, bone crack, anime wow, punch, oh my god, running, roblox oof, lego break, windows xp error, awkward moment. The Dexter one is a snippet of the TV theme and the Fortnite one comes from the game; if YouTube ever claims a clip, look there first.
+
+Music goes in Clippzz/music, named by vibe. If a track's licence asks for a credit, put the credit line in a `.txt` file with the same name; the dashboard shows it with the clip so it can go in the description.
 
 ## Earlier examples: longer story format (studied November 17, 2026)
 
