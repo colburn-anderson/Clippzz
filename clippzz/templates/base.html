@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Clippzz{% endblock %}</title>
+{% if busy %}<meta http-equiv="refresh" content="8">{% endif %}
+<style>
+:root { --bg:#f6f6f3; --card:#fff; --ink:#16181d; --dim:#5f6672; --line:#dcdcd6; --accent:#2f6df6; --good:#12813c; --bad:#b3261e; --warn:#8a5a00; --chip:#ecece6; }
+@media (prefers-color-scheme: dark) { :root { --bg:#111317; --card:#1a1d23; --ink:#eceef2; --dim:#9aa2af; --line:#2c313a; --accent:#7aa5ff; --good:#5fd08a; --bad:#ff8a80; --warn:#f2c14e; --chip:#262a32; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 16px; }
+a { color: var(--accent); }
+h1 { font-size: 1.4rem; margin: 8px 0 4px; } h2 { font-size: 1.1rem; margin: 28px 0 8px; }
+.top { display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; }
+.top a.brand { font-weight:800; font-size:1.25rem; text-decoration:none; color:var(--ink); }
+.dim { color: var(--dim); } .small { font-size: .875rem; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin:12px 0; }
+.row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+input[type=url], input[type=text] { flex:1 1 220px; min-width:0; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); font:inherit; }
+button { padding:10px 14px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); font:inherit; font-weight:600; cursor:pointer; }
+button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+button.good.on { background:var(--good); border-color:var(--good); color:#fff; }
+button.bad.on { background:var(--bad); border-color:var(--bad); color:#fff; }
+.chip { display:inline-block; padding:2px 9px; border-radius:999px; background:var(--chip); font-size:.8rem; font-weight:600; white-space:nowrap; }
+.chip.post, .chip.done { color:var(--good); } .chip.skip, .chip.failed { color:var(--bad); } .chip.maybe, .chip.paused { color:var(--warn); }
+.score { font-size:1.6rem; font-weight:800; min-width:2.2ch; text-align:right; font-variant-numeric: tabular-nums; }
+.vodlink { display:block; text-decoration:none; color:inherit; }
+.error { color: var(--bad); font-weight:600; }
+.player { position:relative; aspect-ratio:16/9; background:#000; border-radius:8px; overflow:hidden; margin:10px 0; }
+.player iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
+ul.tight { margin:6px 0; padding-left:20px; } ul.tight li { margin:2px 0; }
+details summary { cursor:pointer; color:var(--dim); }
+</style>
+</head>
+<body>
+<main>
+<div class="top"><a class="brand" href="/">Clippzz</a>{% block topright %}{% endblock %}</div>
+{% block body %}{% endblock %}
+</main>
+</body>
+</html>

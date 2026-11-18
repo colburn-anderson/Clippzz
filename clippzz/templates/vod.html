@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}{{ vod.title or vod.id }} · Clippzz{% endblock %}
+{% block topright %}<a class="small" href="/">All VODs</a>{% endblock %}
+{% block body %}
+<h1>{{ vod.title or vod.id }}</h1>
+<p class="small dim">
+  {{ vod.channel or "" }}{% if vod.duration_s %} · {{ vod.duration_s|clock }}{% endif %}
+  · <a href="{{ vod.url }}" target="_blank" rel="noopener">Open on YouTube</a>
+  {% if cost %} · ${{ "%.2f"|format(cost) }} spent{% endif %}
+</p>
+
+<div class="card">
+  <div class="row" style="justify-content:space-between">
+    <span><span class="chip {{ vod.state }}">{{ labels.get(vod.state, vod.state) }}</span> {{ vod.detail or "" }}</span>
+    {% if vod.state in ("failed", "paused") %}
+    <form method="post" action="/vod/{{ vod.id }}/retry"><button type="submit">Retry</button></form>
+    {% endif %}
+  </div>
+  {% if signals %}
+  <p class="small dim" style="margin:8px 0 0">Signals used:
+    captions {{ "yes" if signals.get("captions") else "no" }} ·
+    loudness {{ "yes" if signals.get("loudness") else "no" }} ·
+    most-replayed {{ "yes" if signals.get("heatmap") else "not available" }}</p>
+  {% endif %}
+  {% if busy %}<p class="small dim" style="margin:6px 0 0">This page refreshes itself while work is in progress.</p>{% endif %}
+</div>
+
+{% set judged = moments|selectattr("judged")|list %}
+{% set unjudged = moments|rejectattr("judged")|list %}
+
+{% for m in judged %}
+<div class="card" id="m{{ m.id }}">
+  <div class="row" style="justify-content:space-between; align-items:flex-start">
+    <div style="flex:1 1 300px">
+      <div><span class="chip {{ m.verdict }}">{{ {"post":"Worth posting","maybe":"Maybe","skip":"Skip"}.get(m.verdict, m.verdict) }}</span>
+        <span class="chip">{{ m.mood }}</span>
+        {% for f in m.flags|fromjson %}<span class="chip failed">Check: {{ f.replace("_", " ") }}</span>{% endfor %}</div>
+      <strong style="font-size:1.1rem">{{ m.title }}</strong>
+      <div class="small dim">{{ m.start_s|clock }} to {{ m.end_s|clock }} · {{ (m.end_s - m.start_s)|round|int }} seconds</div>
+    </div>
+    <div class="score" title="Judge score out of 100">{{ m.judge_score }}</div>
+  </div>
+  <p style="margin:8px 0"><strong>The joke:</strong> {{ m.joke }}</p>
+  <details>
+    <summary>Watch this moment</summary>
+    <div class="player"><iframe loading="lazy" allowfullscreen
+      src="https://www.youtube-nocookie.com/embed/{{ vod.id }}?start={{ m.start_s|int }}&end={{ (m.end_s + 1)|int }}&rel=0"></iframe></div>
+  </details>
+  <details>
+    <summary>Why, and edit ideas</summary>
+    <p class="small"><strong>On screen:</strong> {{ m.visual }}</p>
+    <ul class="tight small">{% for idea in m.edit_ideas|fromjson %}<li>{{ idea }}</li>{% endfor %}</ul>
+    <p class="small dim">Scout ({{ m.scout_score }}): {{ m.scout_summary }}</p>
+  </details>
+  <form class="row" method="post" action="/moments/{{ m.id }}/rate" style="margin-top:10px">
+    <button class="good {{ 'on' if m.rating == 'good' }}" name="rating" value="good" type="submit">Funny</button>
+    <button class="bad {{ 'on' if m.rating == 'bad' }}" name="rating" value="bad" type="submit">Not funny</button>
+    <input type="text" name="note" placeholder="Note (optional): what worked or did not" value="{{ m.note or '' }}">
+  </form>
+</div>
+{% endfor %}
+
+{% if vod.state == "done" and not judged %}
+<p class="dim">No moment in this VOD was funny enough to propose.</p>
+{% endif %}
+
+{% if unjudged %}
+<h2>Found by the scout, not looked at closely</h2>
+<p class="small dim">Only the top {{ judged|length or "few" }} go to the detailed check to keep costs down.</p>
+{% for m in unjudged %}
+<div class="card small" id="m{{ m.id }}">
+  <div class="row" style="justify-content:space-between">
+    <span><span class="chip">{{ m.scout_kind }}</span> {{ m.start_s|clock }} to {{ m.end_s|clock }}</span>
+    <strong>{{ m.scout_score }}</strong>
+  </div>
+  <div>{{ m.scout_summary }}</div>
+  <div class="dim">{{ m.scout_why }}</div>
+  <a href="{{ vod.url }}&t={{ m.start_s|int }}s" target="_blank" rel="noopener">Watch on YouTube</a>
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

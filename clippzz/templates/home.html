@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block topright %}<span class="small dim">${{ "%.2f"|format(spent) }} of ${{ "%.0f"|format(budget) }} used this month</span>{% endblock %}
+{% block body %}
+<div class="card">
+  <form class="row" method="post" action="/vods">
+    <input type="url" name="url" placeholder="Paste a YouTube VOD link" required>
+    <button class="primary" type="submit">Find funny moments</button>
+  </form>
+  {% if error %}<p class="error small">{{ error }}</p>{% endif %}
+  <p class="small dim" style="margin:8px 0 0">A 3-hour VOD takes roughly 10 to 20 minutes. Rate every moment so the picks can be tuned.</p>
+</div>
+
+{% if last10 %}
+<p class="small dim">Your last {{ last10 }} ratings: <strong>{{ last10_good }} good</strong>. The week 1 gate is 7 of 10.</p>
+{% endif %}
+
+<h2>VODs</h2>
+{% for v in vods %}
+<a class="card vodlink" href="/vod/{{ v.id }}">
+  <div class="row" style="justify-content:space-between">
+    <strong>{{ v.title or v.id }}</strong>
+    <span class="chip {{ v.state }}">{{ labels.get(v.state, v.state) }}</span>
+  </div>
+  <div class="small dim">
+    {{ v.channel or "" }}{% if v.duration_s %} · {{ v.duration_s|clock }}{% endif %}
+    · added {{ v.created_at|ago }}
+    {% if v.state == "done" %} · {{ v.n_post }} worth posting of {{ v.n_found }} found{% endif %}
+    {% if v.cost %} · ${{ "%.2f"|format(v.cost) }}{% endif %}
+  </div>
+  {% if v.state != "done" and v.detail %}<div class="small">{{ v.detail }}</div>{% endif %}
+</a>
+{% else %}
+<p class="dim">Nothing yet. Paste a VOD link above to start.</p>
+{% endfor %}
+{% endblock %}

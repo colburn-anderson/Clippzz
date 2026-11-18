@@ -1,0 +1,40 @@
+# Clippzz on the Raspberry Pi. Start with:  docker compose up -d --build
+#
+# Storage care: scratch files live in RAM (tmpfs), code is mounted read-only,
+# and container logs are capped, so the only regular disk writes are the
+# small SQLite database and compressed transcripts under /data.
+x-common: &common
+  image: clippzz:latest
+  user: "1000:1000"
+  restart: unless-stopped
+  volumes:
+    - ./:/app:ro
+    - /data:/data
+  logging:
+    driver: json-file
+    options: { max-size: "2m", max-file: "2" }
+
+services:
+  web:
+    <<: *common
+    build: .
+    command: uvicorn clippzz.web:app --host 0.0.0.0 --port 8787 --no-access-log
+    ports:
+      - "8787:8787"
+    tmpfs:
+      - /work:size=16m,uid=1000,gid=1000
+    cpus: 1.0
+    mem_limit: 256m
+
+  worker:
+    <<: *common
+    command: python -m clippzz.worker
+    env_file:
+      - ${HOME}/.clippzz.env
+    tmpfs:
+      - /work:size=384m,uid=1000,gid=1000
+    # Capped so the robot arm services on this Pi always have room.
+    cpus: 2.5
+    mem_limit: 1g
+    depends_on:
+      - web
