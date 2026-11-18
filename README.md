@@ -12,8 +12,8 @@ An automated clipping pipeline that runs on a Raspberry Pi 4. It turns long stre
 | --- | --- |
 | Clip engine | Built in this repo and run on the Pi: yt-dlp, ffmpeg and a Claude model. No paid clipping service. |
 | Clip format | The ClippingMania format: one bit, 12 to 25 seconds, chopped hard, stage-direction captions in meme slang, one-word speech captions, colour hits and sound stings |
-| First sources | IShowSpeed and Stable Ronaldo stream VODs on YouTube, pasted in by hand |
-| Accounts | One main account on each platform. Niche accounts later if needed. |
+| First sources | The creators' highlight uploads (IShowSpeed, Kai Cenat), then stream VODs, pasted in by hand |
+| Accounts | Chat Clip That, @ChatCl1pThat, on YouTube, Instagram and Facebook ([brand guide](https://claude.ai/artifact/XQr4RkWvcuuUWgrU4hptq1)) |
 | Order of work | Prove clip quality first, with every clip rated and the good ones posted by hand. Automatic uploads, automatic video discovery and paid clipping campaigns come later. |
 | Budget | Under $30 a month; about $5 expected at the start |
 | Hosting | Everything runs on the Pi in Docker. The dashboard is reached over Tailscale. |
