@@ -14,8 +14,10 @@
       <div class="copybox"><textarea class="posttext" rows="2" readonly>{{ post.title }}</textarea><button type="button" class="copy">Copy</button></div>
       <div class="small dim">YouTube description</div>
       <div class="copybox"><textarea class="posttext" rows="7" readonly>{{ post.description }}</textarea><button type="button" class="copy">Copy</button></div>
-      <div class="small dim">Instagram caption (also used for Facebook when you share the Reel there)</div>
+      <div class="small dim">Instagram caption</div>
       <div class="copybox"><textarea class="posttext" rows="7" readonly>{{ post.caption }}</textarea><button type="button" class="copy">Copy</button></div>
+      <div class="small dim">Facebook caption (only when posting on Facebook separately; Share to Facebook from Instagram reuses the Instagram one)</div>
+      <div class="copybox"><textarea class="posttext" rows="7" readonly>{{ post.facebook }}</textarea><button type="button" class="copy">Copy</button></div>
       <p class="small dim">YouTube: audience "No, it's not made for kids", altered content "No", category Entertainment, visibility Public.<br>
         Instagram: no tags or collaborators, AI label off, Share to Facebook on, and pick a cover frame with a face and a caption.</p>
     </details>

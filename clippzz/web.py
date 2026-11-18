@@ -90,7 +90,26 @@ def post_parts(clip, vod, moment_start=None) -> dict:
         lines.append(f"Music: {music}")
     lines += ["", " ".join(tags + ["#shorts"])]
     description = "\n".join(lines)
-    return {"title": title, "description": description, "caption": instagram_caption(clip, plan, tags, credits)}
+    return {"title": title, "description": description, "caption": instagram_caption(clip, plan, tags, credits),
+            "facebook": facebook_caption(clip, plan, tags, vod)}
+
+
+def facebook_caption(clip, plan: dict, tags: list[str], vod) -> str:
+    """Facebook's format: the same short hook, creators credited by name (a typed
+    @handle only links on Facebook when picked from its list), the music, a
+    follow line with the Page name, and two or three hashtags."""
+    hook = (plan.get("ig_hook") or "").strip() or sentence_case(clip["title"] or "")
+    names = [vod["channel"]] if vod["channel"] else []
+    for tag in tags:
+        known = CREATORS.get(tag.lstrip("#").lower())
+        if known and known[0] not in names:
+            names.append(known[0])
+    lines = [hook, "", "Credit: " + ", ".join(names)]
+    if clip["music_credit"]:
+        music = re.sub(r"\s*\(?https?://\S+\)?", "", clip["music_credit"]).strip().rstrip(",.")
+        lines.append("Music: " + music)
+    lines += ["", f"Follow {config.CHANNEL_NAME} for a new clip every day", "", " ".join(tags[:3])]
+    return "\n".join(lines)
 
 
 def instagram_caption(clip, plan: dict, tags: list[str], credits: list[str]) -> str:

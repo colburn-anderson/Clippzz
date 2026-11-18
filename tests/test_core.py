@@ -103,6 +103,11 @@ class PostTextTest(unittest.TestCase):
         self.assertIn("Follow @chatcl1pthat for a new clip every day", cap)
         self.assertTrue(cap.endswith("#ishowspeed #kaicenat #funny #streamer"))
         self.assertNotIn("#shorts", cap)
+        fb = post["facebook"]
+        self.assertIn("Credit: IShowSpeed, Kai Cenat", fb)
+        self.assertIn("Follow Chat Clip That for a new clip every day", fb)
+        self.assertTrue(fb.endswith("#ishowspeed #kaicenat #funny"))
+        self.assertNotIn("@", fb)
         hooked = post_parts({**clip, "plan": '{"ig_hook": "Speed took the WHOLE plate \U0001F62D"}'}, vod)
         self.assertTrue(hooked["caption"].startswith("Speed took the WHOLE plate"))
 

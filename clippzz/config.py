@@ -38,6 +38,7 @@ WHISPER_THREADS = int(os.environ.get("CLIPPZZ_WHISPER_THREADS", "3"))
 # owner wants to see how a bit ends, which often happens a minute later.
 # The clip accounts (brand guide: Chat Clip That). Used in the Instagram caption.
 CHANNEL_HANDLE = os.environ.get("CLIPPZZ_CHANNEL_HANDLE", "chatcl1pthat")
+CHANNEL_NAME = os.environ.get("CLIPPZZ_CHANNEL_NAME", "Chat Clip That")
 
 CLIP_PAD_BEFORE_S = 45  # 45 s before: a build-up (five failed returns in a row) is all in the footage
 CLIP_PAD_AFTER_S = 75
