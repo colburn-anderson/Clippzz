@@ -9,8 +9,8 @@ from . import config, emoji, ranker, sounds
 log = logging.getLogger("clippzz.planner")
 
 COLOR_NAMES = ["white", "yellow", "cyan", "pink", "red"]
-HIT_KINDS = ["green", "red", "white", "bw"]
-TINTS = ["none", "warm", "bw", "red"]
+HIT_KINDS = ["green", "red", "white", "bw", "win"]
+TINTS = ["none", "warm", "bw", "red", "green"]
 
 SYSTEM = """\
 You edit vertical Shorts for a clip channel modelled on ClippingMania and \
@@ -73,8 +73,11 @@ Never put words in anyone's mouth.
 
 8. Colour hits: one or two frames of solid green, red or white tint on a punch \
 word, an impact or the cut into a reaction (kind green, red or white, length \
-0.1 to 0.2 s), and black-and-white (kind bw, 0.5 to 2 s) for a loss or a fail. \
-About one every 2 seconds, never two flashes within half a second.
+0.1 to 0.2 s); black-and-white held 0.5 to 2 s (kind bw) for a loss or a fail; \
+and green held 0.5 to 2 s (kind win) when someone wins, gets it back or comes \
+out on top. The owner wants the ending to land hard: put a hold and a sound on \
+the payoff. About one effect every 2 seconds, never two flashes within half a \
+second.
 
 9. Sound effects: SOUND_LINE
 

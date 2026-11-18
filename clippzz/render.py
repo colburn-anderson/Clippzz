@@ -38,11 +38,16 @@ HIT_MIX = {
     "white": "rr=1.25:rg=0.2:rb=0.2:gr=0.2:gg=1.25:gb=0.2:br=0.2:bg=0.2:bb=1.25",
     "bw": "rr=0.3:rg=0.59:rb=0.11:gr=0.3:gg=0.59:gb=0.11:br=0.3:bg=0.59:bb=0.11",
 }
+# "win": the frame held green while someone comes out on top (the owner asked
+# for the screen to go green when Kai got his plate back). "bw" is its opposite.
+HIT_MIX["win"] = HIT_MIX["green"]
+HOLDS = {"bw", "win"}
 # Tints for the freeze-frame ending ("warm" is the classic sepia look).
 TINT_MIX = {
     "warm": "rr=0.393:rg=0.769:rb=0.189:gr=0.349:gg=0.686:gb=0.168:br=0.272:bg=0.534:bb=0.131",
     "bw": HIT_MIX["bw"],
     "red": HIT_MIX["red"],
+    "green": HIT_MIX["green"],
 }
 MUSIC_LEVEL = 0.2          # music bed, before it dips under speech
 SOUND_MAX_S = 4.0          # a sound effect never runs longer than this
@@ -360,9 +365,9 @@ def hit_events(hits: list[dict], beats: list[Beat]) -> list[Hit]:
         if t is None or t >= end_all:
             continue
         length = float(h.get("length_s") or 0)
-        length = min(max(length, 0.4), 2.5) if kind == "bw" else min(max(length or 0.15, 0.08), 0.25)
-        flashes = [o for o in out if o.kind != "bw"]
-        if kind != "bw" and flashes and t - flashes[-1].start < 0.4:
+        length = min(max(length, 0.4), 2.5) if kind in HOLDS else min(max(length or 0.15, 0.08), 0.25)
+        flashes = [o for o in out if o.kind not in HOLDS]
+        if kind not in HOLDS and flashes and t - flashes[-1].start < 0.4:
             continue
         out.append(Hit(round(t, 3), round(min(t + length, end_all), 3), kind))
     return out

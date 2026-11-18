@@ -120,6 +120,9 @@ class HitTest(unittest.TestCase):
                                   {"at_s": 2.0, "kind": "bw", "length_s": 9},
                                   {"at_s": 3.0, "kind": "purple", "length_s": 0.1}], beats)
         self.assertEqual([(h.kind, h.start, h.end) for h in hits], [("green", 1.0, 1.15), ("bw", 2.0, 4.5)])
+        win = render.hit_events([{"at_s": 1.0, "kind": "green", "length_s": 0.15},
+                                 {"at_s": 1.1, "kind": "win", "length_s": 1.5}], beats)
+        self.assertEqual([(h.kind, h.end) for h in win], [("green", 1.15), ("win", 2.6)])
 
 
 class PlanTidyTest(unittest.TestCase):
