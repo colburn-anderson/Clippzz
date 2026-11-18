@@ -301,9 +301,12 @@ person talking or reacting, or the player hitting the ball.
 - If that person moves across the frame during the shot, set focus_x_end and \
 focus_y_end to where they are at its end; the window pans in a straight line. \
 Otherwise make the end equal to the start.
-- zoom 1.0 is the full height; use 1.2 to 1.6 only for a close reaction, and \
-never zoom so far that the action leaves the window. A small facecam can take \
-up to 3.
+- zoom 1.0 is the full height. In a wide shot where the person who matters \
+is small (shorter than about a third of the frame height), zoom in on them, \
+1.7 to 2.0, so they fill the window; this matters most in the payoff shot. \
+Use 1.2 to 1.6 for a closer reaction. Never zoom so far that the action (the \
+face, the swing, the ball) leaves the window; if they move, pan with them. A \
+small facecam can take up to 3.
 - layout "stack" (top_box and bottom_box as [left, top, right, bottom], 0 to \
 1) only when two people in different parts of the frame both matter, such as \
 two facecams. Otherwise "single", with both boxes [0, 0, 1, 1].
