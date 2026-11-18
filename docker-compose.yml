@@ -38,9 +38,10 @@ services:
       - ${HOME}/.clippzz.env
     tmpfs:
       - /work:size=384m,uid=1000,gid=1000
-    # Capped so the robot arm services on this Pi always have room. Making a
-    # clip needs the most memory: speech-to-text, then an HD render.
-    cpus: 2.5
+    # Capped so other services on this Pi keep a core. Speech-to-text runs
+    # three threads and slows down about fourfold if the cap is below three
+    # cores, so keep cpus and CLIPPZZ_WHISPER_THREADS in step.
+    cpus: 3.0
     mem_limit: 1536m
     depends_on:
       - web
