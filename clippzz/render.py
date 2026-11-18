@@ -46,6 +46,7 @@ TINT_MIX = {
 }
 MUSIC_LEVEL = 0.2          # music bed, before it dips under speech
 SOUND_MAX_S = 4.0          # a sound effect never runs longer than this
+MAX_CAPTION_S = 1.2        # a speech caption never lingers longer than this
 ENDING_EMOJI_POS = (W // 2, 820)
 
 SWEARS = {
@@ -267,7 +268,7 @@ def speech_events(words, beats: list[Beat], fixes: dict[str, str] | None = None,
             nxt = to_out(chunks[k + 1]["s"], beats)
             if nxt - end < 0.6:
                 end = nxt
-        end = min(end, b.out_e)
+        end = min(end, b.out_e, start + MAX_CAPTION_S)
         if end - start >= 0.08:
             events.append(Event(round(start, 3), round(end, 3), c["text"], c["colour"]))
     return events
@@ -559,7 +560,9 @@ def ffmpeg_command(src: Path, beats: list[Beat], hits: list[Hit], cues: list[Cue
     else:
         final = mix[0]
     # Loud like the reference Shorts, with a ceiling so nothing clips.
-    graph.append(f"{final}loudnorm=I=-11:TP=-1.0:LRA=11,aresample=48000[aout]")
+    # The limiter catches the peaks loudnorm lets through when effects stack up.
+    graph.append(f"{final}loudnorm=I=-11:TP=-1.5:LRA=11,aresample=48000,"
+                 "alimiter=limit=0.84:attack=2:release=50:level=disabled[aout]")
 
     cmd += ["-filter_complex", ";".join(graph), "-map", "[vout]", "-map", "[aout]",
             "-t", f"{end_all:.3f}",

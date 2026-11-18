@@ -65,6 +65,11 @@ class CaptionTest(unittest.TestCase):
         ev = render.speech_events(words, beats)
         self.assertEqual([e.text for e in ev], ["RUN ALL", "THE WAY"])
 
+    def test_a_caption_never_lingers(self):
+        beats = render.build_timeline([{"start_s": 0.0, "end_s": 5.0}])
+        ev = render.speech_events([[0.5, 3.5, "Who?"]], beats)
+        self.assertAlmostEqual(ev[0].end - ev[0].start, render.MAX_CAPTION_S)
+
     def test_loud_phrase_endings_get_an_exclamation(self):
         beats = render.build_timeline([{"start_s": 0.0, "end_s": 5.0}])
         words = [[0.0, 0.3, "give"], [0.35, 0.5, "me"], [0.55, 0.9, "food"]]
