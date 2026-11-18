@@ -137,8 +137,12 @@ def _home_data(conn) -> dict:
     working = conn.execute(CLIP_JOIN + " WHERE c.state IN ('queued','working')"
                            " ORDER BY c.state='working' DESC, c.created_at").fetchall()
     failed = conn.execute(CLIP_JOIN + " WHERE c.state='failed' ORDER BY c.updated_at DESC LIMIT 5").fetchall()
+    # One clip per moment: the newest finished version, unless that moment is already posted.
     ready = conn.execute(CLIP_JOIN + " WHERE c.state='done' AND c.posted_at IS NULL"
-                         " AND (c.rating IS NULL OR c.rating!='bad') ORDER BY c.updated_at DESC LIMIT 12").fetchall()
+                         " AND (c.rating IS NULL OR c.rating!='bad')"
+                         " AND c.id=(SELECT MAX(c2.id) FROM clips c2 WHERE c2.moment_id=c.moment_id AND c2.state='done')"
+                         " AND NOT EXISTS (SELECT 1 FROM clips c3 WHERE c3.moment_id=c.moment_id AND c3.posted_at IS NOT NULL)"
+                         " ORDER BY c.updated_at DESC LIMIT 12").fetchall()
     posted = conn.execute(CLIP_JOIN + " WHERE c.state='done' AND c.posted_at IS NOT NULL"
                           " ORDER BY c.posted_at DESC LIMIT 20").fetchall()
     rated = conn.execute(

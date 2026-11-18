@@ -66,6 +66,20 @@ class ReviewFlowTest(unittest.TestCase):
         with db.session() as conn:
             self.assertIsNone(conn.execute("SELECT posted_at FROM clips WHERE id=?", (cid,)).fetchone()[0])
 
+    def test_ready_shows_only_the_newest_unposted_version(self):
+        with db.session() as conn:
+            old = db.add_clip(conn, self.mid)
+            db.set_clip(conn, old, "done", "v1", title="OLD VERSION!!!")
+            new = db.add_clip(conn, self.mid)
+            db.set_clip(conn, new, "done", "v2", title="NEW VERSION!!!")
+        text = self.client.get("/").text
+        ready = text.split('id="ready"')[1].split('id="posted"')[0]
+        self.assertIn("NEW VERSION", ready)
+        self.assertNotIn("OLD VERSION", ready)
+        self.client.post(f"/clips/{new}/posted")
+        ready = self.client.get("/").text.split('id="ready"')[1].split('id="posted"')[0]
+        self.assertNotIn("VERSION", ready)
+
     def test_clip_steps(self):
         self.assertEqual(web.clip_step("queued", None), 0)
         self.assertEqual(web.clip_step("working", "Downloading the moment in HD"), 1)
