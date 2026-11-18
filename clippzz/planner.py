@@ -119,7 +119,7 @@ best plan you can either way. No slurs in stage directions or the title.
 """
 
 
-def system_prompt(sound_names: list[str], music_names: list[str]) -> str:
+def system_prompt(sound_names: list[str], music_names: list[str], app_songs=()) -> str:
     if sound_names:
         sound_line = (
             "the owner's library of classic streamer meme sounds. These short sounds are "
@@ -142,6 +142,12 @@ def system_prompt(sound_names: list[str], music_names: list[str]) -> str:
             f"\"none\": {'; '.join(music_names)}.")
     else:
         music_line = "none available yet; choose \"none\"."
+    if app_songs:
+        music_line += (
+            " Or an in-app song, which the owner adds inside Instagram or YouTube when "
+            "posting (it is licensed there, so the clip gets no music of its own): "
+            + "; ".join(f"\"app: {s['name']}\" for {s['when']}" for s in app_songs)
+            + ". Choose an in-app song only when its mood clearly fits the moment.")
     return SYSTEM.replace("SOUND_LINE", sound_line).replace("MUSIC_LINE", music_line)
 
 
@@ -150,7 +156,7 @@ def _obj(props: dict) -> dict:
             "additionalProperties": False}
 
 
-def schema(sound_names: list[str], music_names: list[str]) -> dict:
+def schema(sound_names: list[str], music_names: list[str], app_names=()) -> dict:
     num, text = {"type": "number"}, {"type": "string"}
     box = {"type": "array", "items": num}
     sound_enum = sound_names or ["none"]
@@ -189,7 +195,7 @@ def schema(sound_names: list[str], music_names: list[str]) -> dict:
             "emoji": {"type": "string", "enum": ["none", *emoji.CHOICES]},
             "sound": {"type": "string", "enum": ["none", *sound_names]},
         }),
-        "music": {"type": "string", "enum": ["none", *music_names]},
+        "music": {"type": "string", "enum": ["none", *music_names, *[f"app: {n}" for n in app_names]]},
         "caption_fixes": {"type": "array", "items": _obj({"heard": text, "write": text})},
     })
 
@@ -226,9 +232,9 @@ def format_ranges(times: list[float], step: float = 0.5) -> str:
 
 def plan_clip(meta: dict, moment: dict, frames, words, loud_times, duration: float,
               src_w: int, src_h: int, *, moment_span=None, disagreements=(), owner_notes=(),
-              sound_names=(), music_names=()):
+              sound_names=(), music_names=(), app_songs=()):
     """Returns (plan, input_tokens, output_tokens)."""
-    sound_names, music_names = list(sound_names), list(music_names)
+    sound_names, music_names, app_songs = list(sound_names), list(music_names), list(app_songs)
     span = (f"The reviewer's cut of the moment runs from {moment_span[0]:.1f}s to "
             f"{moment_span[1]:.1f}s; the rest is context before it and the aftermath "
             f"after it.\n" if moment_span else "")
@@ -265,10 +271,11 @@ def plan_clip(meta: dict, moment: dict, frames, words, loud_times, duration: flo
         max_tokens=64000,
         betas=["server-side-fallback-2026-07-01"],
         fallbacks="default",
-        system=system_prompt(sound_names, music_names),
+        system=system_prompt(sound_names, music_names, app_songs),
         thinking={"type": "adaptive"},
         output_config={"effort": config.PLANNER_EFFORT,
-                       "format": {"type": "json_schema", "schema": schema(sound_names, music_names)}},
+                       "format": {"type": "json_schema",
+                                  "schema": schema(sound_names, music_names, [s["name"] for s in app_songs])}},
         messages=[{"role": "user", "content": content}],
     ) as stream:
         response = stream.get_final_message()

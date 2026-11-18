@@ -232,6 +232,23 @@ class LibraryTest(unittest.TestCase):
         finally:
             config.LIBRARY_DIR = old
 
+    def test_app_songs_are_read_and_offered(self):
+        lib = Path(tempfile.mkdtemp())
+        (lib / "music").mkdir()
+        (lib / "music" / "app songs.txt").write_text(
+            "# comment\nblue (slowed down) by yung kai | wholesome moments | right before the chorus\n")
+        old = config.LIBRARY_DIR
+        config.LIBRARY_DIR = lib
+        try:
+            songs = sounds.app_songs()
+            self.assertEqual(songs, [{"name": "blue (slowed down) by yung kai", "when": "wholesome moments",
+                                      "part": "right before the chorus"}])
+            sch = planner.schema([], [], [s["name"] for s in songs])
+            self.assertIn("app: blue (slowed down) by yung kai", sch["properties"]["music"]["enum"])
+            self.assertIn("in-app song", planner.system_prompt([], [], songs))
+        finally:
+            config.LIBRARY_DIR = old
+
     @unittest.skipUnless(Path(config.EMOJI_FONT).exists(), "emoji font not installed here")
     def test_emoji_draws(self):
         path = emoji.png("💀", 120, Path(tempfile.mkdtemp()))

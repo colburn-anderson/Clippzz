@@ -73,6 +73,23 @@ def music() -> dict[str, Path]:
     return _folder("music")
 
 
+def app_songs() -> list[dict]:
+    """Commercial songs the owner adds inside Instagram or YouTube at posting
+    time, where they are licensed (music/app songs.txt: song | when | part)."""
+    try:
+        text = (config.LIBRARY_DIR / "music" / "app songs.txt").read_text(encoding="utf-8")
+    except OSError:
+        return []
+    songs = []
+    for line in text.splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        parts = [p.strip() for p in line.split("|")]
+        songs.append({"name": parts[0], "when": parts[1] if len(parts) > 1 else "",
+                      "part": parts[2] if len(parts) > 2 else ""})
+    return songs
+
+
 def choices() -> list[str]:
     """Sound names the planner may use: the owner's library, else (if switched
     on) the synthesised stand-ins, else none."""

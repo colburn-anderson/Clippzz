@@ -192,9 +192,13 @@ def make(conn, clip_id: int, keep: bool = False, rerender: bool = False) -> dict
             plan, tin, tout = planner.plan_clip(
                 meta, dict(m), frames, words, loud_times, info["duration"], info["width"], info["height"],
                 moment_span=span, disagreements=diffs, owner_notes=owner_notes(conn, m["id"]),
-                sound_names=sounds.choices(), music_names=list(sounds.music()))
+                sound_names=sounds.choices(), music_names=list(sounds.music()), app_songs=sounds.app_songs())
             cost = db.record_usage(conn, vod["id"], "plan", config.PLANNER_MODEL, tin, tout)
             plan = planner.tidy(plan, words, info["duration"])
+            if str(plan.get("music", "")).startswith("app: "):  # the owner adds it in the app
+                name = plan["music"][5:]
+                song = next((s for s in sounds.app_songs() if s["name"] == name), {"name": name, "part": ""})
+                plan["_app_song"] = {"name": song["name"], "part": song.get("part", "")}
             plan["_settings"] = {"model": config.PLANNER_MODEL, "effort": config.PLANNER_EFFORT,
                                  "frames": len(frames), "cost_usd": round(cost, 3)}
             db.set_clip(conn, clip_id, "working", "Rendering", plan=json.dumps(plan),

@@ -8,6 +8,8 @@
       · <a href="/clips/{{ c.id }}.mp4" download>Download</a>{% if vod %} · <a href="/vod/{{ vod.id }}#m{{ c.moment_id }}">from {{ vod.title or vod.id }}</a>{% endif %}</div>
     {% if c.posted_at %}<div class="small"><span class="chip done">Posted {{ c.posted_at|ago }}</span></div>{% endif %}
     {% set post = post_parts(c, vod, m_start) %}
+    {% set plan_ = c.plan|fromjsonobj %}
+    {% if plan_._app_song %}<div class="appsong">Add in the app when posting: <strong>{{ plan_._app_song.name }}</strong>{% if plan_._app_song.part %}, {{ plan_._app_song.part }}{% endif %}. Keep the clip's own audio at full and the song at about 20 to 30 percent.</div>{% endif %}
     <details>
       <summary>Post text: title, description, caption</summary>
       <div class="small dim" style="margin-top:6px">YouTube title</div>
