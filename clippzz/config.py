@@ -39,7 +39,7 @@ WHISPER_THREADS = int(os.environ.get("CLIPPZZ_WHISPER_THREADS", "3"))
 # The clip accounts (brand guide: Chat Clip That). Used in the Instagram caption.
 CHANNEL_HANDLE = os.environ.get("CLIPPZZ_CHANNEL_HANDLE", "chatcl1pthat")
 
-CLIP_PAD_BEFORE_S = 10
+CLIP_PAD_BEFORE_S = 45  # 45 s before: a build-up (five failed returns in a row) is all in the footage
 CLIP_PAD_AFTER_S = 75
 
 # Dollars per million tokens (input, output), used to track spend.
